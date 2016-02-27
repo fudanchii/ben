@@ -29,6 +29,10 @@ var _ = Describe("Bencode", func() {
 				Expect(err).To(BeNil())
 			})
 
+			It("should have Integer type", func() {
+				Expect(bInt.Type()).To(Equal(IntType))
+			})
+
 			It("should returns 71183928", func() {
 				Expect(bInt.Val().(int64)).To(Equal(int64(71183928)))
 			})
@@ -59,6 +63,10 @@ var _ = Describe("Bencode", func() {
 
 			It("should decodes successfully", func() {
 				Expect(err).To(BeNil())
+			})
+
+			It("should have String type", func() {
+				Expect(bStr.Type()).To(Equal(StringType))
 			})
 
 			It("should returns Mi Amigos", func() {
@@ -103,8 +111,12 @@ var _ = Describe("Bencode", func() {
 				Expect(err).To(BeNil())
 			})
 
+			It("should have List type", func() {
+				Expect(bList.Type()).To(Equal(ListType))
+			})
+
 			lElm, ok := bList.Val().([]Element)
-			It("should have []Element type", func() {
+			It("should have []Element type for its data", func() {
 				Expect(ok).To(BeTrue())
 			})
 
@@ -119,6 +131,45 @@ var _ = Describe("Bencode", func() {
 			It("should returns name for the last element", func() {
 				Expect(lElm[4].Val().(string)).To(Equal("name"))
 			})
+		})
+
+		It("returns EOF when input is ended too early", func() {
+			source := bytes.NewBufferString("li234e")
+			_, err := Decode(source)
+			Expect(err.Error()).To(Equal("EOF"))
+		})
+
+		Context("decoding partially corrupted list", func() {
+			source := bytes.NewBufferString("li234e4:abcdi24")
+			bList, err := Decode(source)
+
+			It("still returns error", func() {
+				Expect(err.Error()).To(Equal("EOF"))
+			})
+
+			It("returns non nil value", func() {
+				Expect(bList).NotTo(BeNil())
+			})
+
+			if bList.(*List) != nil {
+				lmnt, ok := bList.Val().([]Element)
+
+				It("should have []Element type", func() {
+					Expect(ok).To(BeTrue())
+				})
+
+				It("should have the first two element", func() {
+					Expect(len(lmnt)).To(Equal(2))
+				})
+
+				It("should returns 234 for the first element", func() {
+					Expect(lmnt[0].Val().(int64)).To(Equal(int64(234)))
+				})
+
+				It("should returns abcd for the second element", func() {
+					Expect(lmnt[1].Val().(string)).To(Equal("abcd"))
+				})
+			}
 		})
 	})
 })

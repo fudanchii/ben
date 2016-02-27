@@ -175,7 +175,7 @@ func decodeList(input io.ByteReader) (*List, error) {
 	for {
 		lmnt, err := Decode(input)
 		if err != nil {
-			return nil, err
+			return &List{lst}, err
 		}
 		if lmnt == nil { // end of sequence
 			break
