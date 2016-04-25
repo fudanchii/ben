@@ -172,4 +172,36 @@ var _ = Describe("Bencode", func() {
 			}
 		})
 	})
+
+	Describe("Dictionary type", func() {
+		It("can encode Dictionary", func() {
+			dict := NewDictionary(map[string]Element{
+				"answer":   NewInteger(42),
+				"question": NewString("to be determined"),
+			})
+			Expect(dict.Encode()).To(Equal([]byte("d6:answeri42e8:question16:to be determinede")))
+		})
+
+		Context("decoding dictionary", func() {
+			source := bytes.NewBufferString("d6:answeri42e8:question16:to be determinede")
+			bDict, err := Decode(source)
+
+			It("should decodes succesfully", func() {
+				Expect(err).To(BeNil())
+			})
+
+			It("should have dictionary type", func() {
+				Expect(bDict.Type()).To(Equal(DictType))
+			})
+
+			dVal, ok := bDict.Val().(map[string]Element)
+			It("should successfully cast its value", func() {
+				Expect(ok).To(BeTrue())
+			})
+			It("should have 2 elements", func() {
+				Expect(len(dVal)).To(Equal(2))
+			})
+
+		})
+	})
 })

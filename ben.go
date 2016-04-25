@@ -207,6 +207,10 @@ type Dictionary struct {
 	data map[string]Element
 }
 
+func NewDictionary(input map[string]Element) *Dictionary {
+	return &Dictionary{input}
+}
+
 func decodeDict(input io.ByteReader) (*Dictionary, error) {
 	dict := make(map[string]Element)
 	for {
