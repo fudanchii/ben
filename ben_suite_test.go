@@ -198,10 +198,18 @@ var _ = Describe("Bencode", func() {
 			It("should successfully cast its value", func() {
 				Expect(ok).To(BeTrue())
 			})
+
 			It("should have 2 elements", func() {
 				Expect(len(dVal)).To(Equal(2))
 			})
 
+			It("should have key: 'answer', with value: '42'", func() {
+				Expect(dVal["answer"]).To(Equal(NewInteger(42)))
+			})
+
+			It("should have key: 'question', with value: 'to be determined'", func() {
+				Expect(dVal["question"]).To(Equal(NewString("to be determined")))
+			})
 		})
 	})
 })
