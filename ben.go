@@ -27,7 +27,7 @@ const (
 type Element interface {
 	Type() ElementType
 	Encode() []byte
-	Val() interface{}
+	Val() any
 }
 
 func Decode(input io.ByteReader) (Element, error) {
@@ -105,7 +105,7 @@ func (bInt *Integer) Encode() []byte {
 	return buff.Bytes()
 }
 
-func (bInt *Integer) Val() interface{} {
+func (bInt *Integer) Val() any {
 	return bInt.data
 }
 
@@ -156,7 +156,7 @@ func (bStr *String) Encode() []byte {
 	return buff.Bytes()
 }
 
-func (bStr *String) Val() interface{} {
+func (bStr *String) Val() any {
 	return bStr.data
 }
 
@@ -199,7 +199,7 @@ func (bLst *List) Encode() []byte {
 	return buff.Bytes()
 }
 
-func (bLst *List) Val() interface{} {
+func (bLst *List) Val() any {
 	return bLst.data
 }
 
@@ -252,7 +252,7 @@ func (bDct *Dictionary) Encode() []byte {
 	return buff.Bytes()
 }
 
-func (bDct *Dictionary) Val() interface{} {
+func (bDct *Dictionary) Val() any {
 	return bDct.data
 }
 
