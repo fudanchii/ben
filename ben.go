@@ -1,6 +1,7 @@
 package ben
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -27,49 +28,56 @@ const (
 type Element interface {
 	Type() ElementType
 	Encode() []byte
-	Val() any
 }
 
-func Decode(input io.ByteReader) (Element, error) {
-	token, err := input.ReadByte()
-	if err != nil {
-		return nil, err
+type Bencoder[T Element] interface {
+	Decode(*bufio.Reader) (T, error)
+	Encode() []byte
+	Type() ElementType
+}
+
+func Decode[B Bencoder[B]](input *bufio.Reader) (B, error) {
+	var b B
+	return b.Decode(input)
+}
+
+type Integer int64
+
+func NewInteger(i int64) Integer {
+	return Integer(i)
+}
+
+func (i Integer) TryFrom(e Element) (Integer, error) {
+	if e.Type() != i.Type() {
+		return i, fmt.Errorf("not an integer")
 	}
-	switch token {
-	case DICT_START:
-		return decodeDict(input)
-	case INT_START:
-		return decodeInt(input)
-	case LIST_START:
-		return decodeList(input)
-	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		return decodeString(input, token)
-	case SEQ_END:
-		return nil, nil
-	default:
-		return nil, InvalidInputError{}
-	}
+	return e.(Integer), nil
 }
 
-type Integer struct {
-	data int64
+func (i Integer) Type() ElementType {
+	return IntType
 }
 
-func NewInteger(i int64) *Integer {
-	return &Integer{i}
-}
-
-func decodeInt(input io.ByteReader) (*Integer, error) {
+func (i Integer) Decode(input *bufio.Reader) (Integer, error) {
 	var (
 		ch    byte
 		rInt  int64
 		err   error
 		minus bool
 	)
+	ch, err = input.ReadByte()
+	if err != nil {
+		return i, err
+	}
+
+	if ch != INT_START {
+		return i, fmt.Errorf("input is not Integer")
+	}
+
 	for {
 		ch, err = input.ReadByte()
 		if err != nil {
-			return nil, err
+			return i, err
 		}
 		if ch == SEQ_END {
 			break
@@ -79,181 +87,236 @@ func decodeInt(input io.ByteReader) (*Integer, error) {
 			continue
 		}
 
-		i := int(ch) - 0x30
-		if 0 <= i && i <= 9 {
-			rInt = rInt*int64(10) + int64(i)
+		it := int(ch) - 0x30
+		if 0 <= it && it <= 9 {
+			rInt = rInt*int64(10) + int64(it)
 			continue
 		}
 
-		return nil, InvalidInputError{strconv.Itoa(int(ch))}
+		return i, InvalidInputError{strconv.Itoa(int(ch))}
 	}
+
 	if minus {
 		rInt = -rInt
 	}
-	return &Integer{rInt}, err
+
+	return Integer(rInt), nil
 }
 
-func (bInt *Integer) Type() ElementType {
-	return IntType
-}
-
-func (bInt *Integer) Encode() []byte {
+func (bInt Integer) Encode() []byte {
 	var buff bytes.Buffer
 	buff.WriteByte(INT_START)
-	buff.WriteString(strconv.FormatInt(bInt.data, 10))
+	buff.WriteString(strconv.FormatInt(int64(bInt), 10))
 	buff.WriteByte(SEQ_END)
 	return buff.Bytes()
 }
 
-func (bInt *Integer) Val() any {
-	return bInt.data
+type String string
+
+func NewString(input string) String {
+	return String(input)
 }
 
-type String struct {
-	data string
+func (s String) TryFrom(e Element) (String, error) {
+	if e.Type() != s.Type() {
+		return s, fmt.Errorf("not a string")
+	}
+	return e.(String), nil
 }
 
-func NewString(input string) *String {
-	return &String{input}
+func (s String) Type() ElementType {
+	return StringType
 }
 
-func decodeString(input io.ByteReader, first_token byte) (*String, error) {
+func (s String) Decode(input *bufio.Reader) (String, error) {
 	var (
 		buff   bytes.Buffer
 		length []byte
 		err    error
 		sLen   int64
 	)
+
+	first_token, err := input.ReadByte()
+	if err != nil {
+		return s, err
+	}
+
 	length = append(length, first_token)
+
 	for {
 		ch, err := input.ReadByte()
 		if err != nil {
-			return nil, err
+			return s, err
 		}
 		if ch == LENGTH_DELIMITER {
 			break
 		}
 		length = append(length, ch)
 	}
+
 	if sLen, err = strconv.ParseInt(string(length), 10, 64); err != nil {
-		return nil, err
+		return s, err
 	}
-	if _, err := io.CopyN(&buff, input.(io.Reader), sLen); err != nil {
-		return nil, err
+
+	if _, err := io.CopyN(&buff, input, sLen); err != nil {
+		return s, err
 	}
-	return &String{buff.String()}, err
+
+	return String(buff.String()), nil
 }
 
-func (bStr *String) Type() ElementType {
-	return StringType
-}
-
-func (bStr *String) Encode() []byte {
+func (bStr String) Encode() []byte {
 	var buff bytes.Buffer
-	buff.WriteString(strconv.Itoa(len(bStr.data)))
+	buff.WriteString(strconv.Itoa(len(bStr)))
 	buff.WriteByte(LENGTH_DELIMITER)
-	buff.WriteString(bStr.data)
+	buff.WriteString(string(bStr))
 	return buff.Bytes()
 }
 
-func (bStr *String) Val() any {
-	return bStr.data
+func InferredTypeDecode(input *bufio.Reader) (Element, error) {
+	current_token, err := input.Peek(1)
+	if err != nil {
+		return nil, err
+	}
+
+	switch current_token[0] {
+	case DICT_START:
+		return Decode[Dictionary](input)
+	case INT_START:
+		return Decode[Integer](input)
+	case LIST_START:
+		return Decode[List](input)
+	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		return Decode[String](input)
+	case SEQ_END:
+		return nil, nil
+	default:
+		return nil, InvalidInputError{}
+	}
 }
 
-type List struct {
-	data []Element
+type List []Element
+
+func NewList(input []Element) List {
+	return List(input)
 }
 
-func NewList(input []Element) *List {
-	return &List{input}
+func (l List) TryFrom(e Element) (List, error) {
+	if e.Type() != l.Type() {
+		return l, fmt.Errorf("not a list")
+	}
+	return e.(List), nil
 }
 
-func decodeList(input io.ByteReader) (*List, error) {
+func (l List) Decode(input *bufio.Reader) (List, error) {
 	var (
 		lst []Element
+		err error
+		ch  byte
 	)
+
+	ch, err = input.ReadByte()
+	if err != nil {
+		return l, err
+	}
+
+	if ch != LIST_START {
+		return l, fmt.Errorf("not a list type")
+	}
+
 	for {
-		lmnt, err := Decode(input)
+		var lmnt Element
+		lmnt, err = InferredTypeDecode(input)
 		if err != nil {
-			return &List{lst}, err
+			return List(lst), err
 		}
 		if lmnt == nil { // end of sequence
 			break
 		}
 		lst = append(lst, lmnt)
 	}
-	return &List{lst}, nil
+	return List(lst), err
 }
 
-func (bLst *List) Type() ElementType {
+func (bLst List) Type() ElementType {
 	return ListType
 }
 
-func (bLst *List) Encode() []byte {
+func (bLst List) Encode() []byte {
 	var buff bytes.Buffer
 	buff.WriteByte(LIST_START)
-	for _, elm := range bLst.data {
+	for _, elm := range bLst {
 		buff.Write(elm.Encode())
 	}
 	buff.WriteByte(SEQ_END)
 	return buff.Bytes()
 }
 
-func (bLst *List) Val() any {
-	return bLst.data
+type Dictionary map[string]Element
+
+func NewDictionary(input map[string]Element) Dictionary {
+	return Dictionary(input)
 }
 
-type Dictionary struct {
-	data map[string]Element
+func (d Dictionary) TryFrom(e Element) (Dictionary, error) {
+	if e.Type() != d.Type() {
+		return d, fmt.Errorf("not a dictionary")
+	}
+	return e.(Dictionary), nil
 }
 
-func NewDictionary(input map[string]Element) *Dictionary {
-	return &Dictionary{input}
-}
-
-func decodeDict(input io.ByteReader) (*Dictionary, error) {
+func (d Dictionary) Decode(input *bufio.Reader) (Dictionary, error) {
 	dict := make(map[string]Element)
+	ch, err := input.ReadByte()
+	if err != nil {
+		return d, err
+	}
+
+	if ch != DICT_START {
+		return d, fmt.Errorf("not a dictionary")
+	}
+
 	for {
-		key, err := Decode(input)
+		testPeek, err := input.Peek(1)
 		if err != nil {
 			return nil, err
 		}
-		if key == nil {
+
+		if testPeek[0] == SEQ_END {
 			break
 		}
-		if key.Type() != StringType {
-			return nil, InvalidInputError{"expecting string type"}
+
+		key, err := Decode[String](input)
+		if err != nil {
+			return nil, err
 		}
 
-		val, err := Decode(input)
+		val, err := InferredTypeDecode(input)
 		if err != nil {
 			return nil, err
 		}
 		if val == nil {
 			return nil, InvalidInputError{"key without value"}
 		}
-		dict[key.Val().(string)] = val
+		dict[string(key)] = val
 	}
-	return &Dictionary{dict}, nil
+
+	return Dictionary(dict), nil
 }
 
-func (bDct *Dictionary) Type() ElementType {
+func (bDct Dictionary) Type() ElementType {
 	return DictType
 }
 
-func (bDct *Dictionary) Encode() []byte {
+func (bDct Dictionary) Encode() []byte {
 	var buff bytes.Buffer
 	buff.WriteByte(DICT_START)
-	for k, v := range bDct.data {
-		buff.Write((&String{k}).Encode())
+	for k, v := range bDct {
+		buff.Write(String(k).Encode())
 		buff.Write(v.Encode())
 	}
 	buff.WriteByte(SEQ_END)
 	return buff.Bytes()
-}
-
-func (bDct *Dictionary) Val() any {
-	return bDct.data
 }
 
 type InvalidInputError struct {
