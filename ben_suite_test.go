@@ -20,7 +20,7 @@ func TestBen(t *testing.T) {
 var _ = Describe("Bencode", func() {
 	Describe("Integer Type", func() {
 		It("can encode integer", func() {
-			Expect(Integer(12).Encode()).To(Equal([]byte("i12e")))
+			Expect(Int(12).Encode()).To(Equal([]byte("i12e")))
 		})
 
 		Context("decoding integer", func() {
@@ -33,7 +33,7 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should returns 71183928", func() {
-				Expect(infr.TryInto[Integer](bInt)).To(Equal(Integer(71183928)))
+				Expect(bInt).To(Equal(Int(71183928)))
 			})
 		})
 
@@ -54,7 +54,7 @@ var _ = Describe("Bencode", func() {
 
 	Describe("String Type", func() {
 		It("can encode string", func() {
-			Expect(String("Hello World!").Encode()).To(Equal([]byte("12:Hello World!")))
+			Expect(Str("Hello World!").Encode()).To(Equal([]byte("12:Hello World!")))
 		})
 
 		Context("decoding string", func() {
@@ -67,7 +67,7 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should returns Mi Amigos", func() {
-				Expect(string(bStr)).To(Equal("Mi Amigos"))
+				Expect(bStr.Val).To(Equal("Mi Amigos"))
 			})
 		})
 
@@ -77,7 +77,7 @@ var _ = Describe("Bencode", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should returns abc", func() {
-				Expect(string(bStr)).To(Equal("abc"))
+				Expect(bStr.Val).To(Equal("abc"))
 			})
 		})
 
@@ -91,9 +91,9 @@ var _ = Describe("Bencode", func() {
 
 	Describe("List Type", func() {
 		It("can encode list", func() {
-			list := List([]Element{
-				Integer(42),
-				String("Hello"),
+			list := Lst([]Element{
+				Int(42),
+				Str("Hello"),
 			})
 			Expect(list.Encode()).To(Equal([]byte("li42e5:Helloe")))
 		})
@@ -113,15 +113,15 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should have 5 elements", func() {
-				Expect(len(lElm)).To(Equal(5))
+				Expect(len(lElm.Val)).To(Equal(5))
 			})
 
 			It("should returns 42 for the first element", func() {
-				Expect(infr.TryInto[Integer](lElm[0])).To(Equal(Integer(42)))
+				Expect(lElm.Val[0]).To(Equal(Int(42)))
 			})
 
 			It("should returns name for the last element", func() {
-				Expect(infr.TryInto[String](lElm[4])).To(Equal(String("name")))
+				Expect(lElm.Val[4]).To(Equal(Str("name")))
 			})
 		})
 
@@ -144,24 +144,24 @@ var _ = Describe("Bencode", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should have the first two element", func() {
-				Expect(len(lst)).To(Equal(2))
+				Expect(len(lst.Val)).To(Equal(2))
 			})
 
 			It("should returns 234 for the first element", func() {
-				Expect(infr.TryInto[Integer](lst[0])).To(Equal(Integer(234)))
+				Expect(lst.Val[0]).To(Equal(Int(234)))
 			})
 
 			It("should returns abcd for the second element", func() {
-				Expect(infr.TryInto[String](lst[1])).To(Equal(String("abcd")))
+				Expect(lst.Val[1]).To(Equal(Str("abcd")))
 			})
 		})
 	})
 
 	Describe("Dictionary type", func() {
 		It("can encode Dictionary", func() {
-			dict := Dictionary(map[string]Element{
-				"answer":   Integer(42),
-				"question": String("to be determined"),
+			dict := Dct(map[string]Element{
+				"answer":   Int(42),
+				"question": Str("to be determined"),
 			})
 			Expect(dict.Encode()).To(Equal([]byte("d6:answeri42e8:question16:to be determinede")))
 		})
@@ -178,19 +178,19 @@ var _ = Describe("Bencode", func() {
 			It("should have 2 elements", func() {
 				d, err := infr.TryInto[Dictionary](bDict)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(d)).To(Equal(2))
+				Expect(len(d.Val)).To(Equal(2))
 			})
 
 			It("should have key: 'answer', with value: '42'", func() {
 				d, err := infr.TryInto[Dictionary](bDict)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(d["answer"]).To(Equal(Integer(42)))
+				Expect(d.Val["answer"]).To(Equal(Int(42)))
 			})
 
 			It("should have key: 'question', with value: 'to be determined'", func() {
 				d, err := infr.TryInto[Dictionary](bDict)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(d["question"]).To(Equal(String("to be determined")))
+				Expect(d.Val["question"]).To(Equal(Str("to be determined")))
 			})
 		})
 	})

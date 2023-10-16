@@ -25,15 +25,52 @@ const (
 	DictType
 )
 
+type ElementValues interface {
+	String() (String, error)
+	Integer() (Integer, error)
+	List() (List, error)
+	Dictionary() (Dictionary, error)
+}
+
+type DefEltVal[T any] struct {
+	Val T
+}
+
+func V[T any](v T) DefEltVal[T] {
+	return DefEltVal[T]{v}
+}
+
+func (d DefEltVal[T]) String() (String, error) {
+	var s String
+	return s, fmt.Errorf("Element is not a String")
+}
+
+func (d DefEltVal[T]) Integer() (Integer, error) {
+	var i Integer
+	return i, fmt.Errorf("Element is not an Integer")
+}
+
+func (d DefEltVal[T]) List() (List, error) {
+	var l List
+	return l, fmt.Errorf("Element is not a List")
+}
+
+func (d DefEltVal[T]) Dictionary() (Dictionary, error) {
+	var di Dictionary
+	return di, fmt.Errorf("Element is not a Dictionary")
+}
+
 type Element interface {
 	Type() ElementType
 	Encode() []byte
+
+	ElementValues
 }
 
 type Bencoder[T Element] interface {
 	Decode(*bufio.Reader) (T, error)
-	Encode() []byte
-	Type() ElementType
+
+	Element
 }
 
 func Decode[B Bencoder[B]](input *bufio.Reader) (B, error) {
@@ -41,13 +78,20 @@ func Decode[B Bencoder[B]](input *bufio.Reader) (B, error) {
 	return b.Decode(input)
 }
 
-type Integer int64
+type Integer struct {
+	DefEltVal[int64]
+}
+
+func Int(v int64) Integer {
+	return Integer{V(v)}
+}
+
+func (i Integer) Integer() (Integer, error) {
+	return i, nil
+}
 
 func (i Integer) TryFrom(e Element) (Integer, error) {
-	if e.Type() != i.Type() {
-		return i, fmt.Errorf("not an integer")
-	}
-	return e.(Integer), nil
+	return e.Integer()
 }
 
 func (i Integer) Type() ElementType {
@@ -96,24 +140,31 @@ func (i Integer) Decode(input *bufio.Reader) (Integer, error) {
 		rInt = -rInt
 	}
 
-	return Integer(rInt), nil
+	return Int(rInt), nil
 }
 
 func (bInt Integer) Encode() []byte {
 	var buff bytes.Buffer
 	buff.WriteByte(INT_START)
-	buff.WriteString(strconv.FormatInt(int64(bInt), 10))
+	buff.WriteString(strconv.FormatInt(bInt.Val, 10))
 	buff.WriteByte(SEQ_END)
 	return buff.Bytes()
 }
 
-type String string
+type String struct {
+	DefEltVal[string]
+}
+
+func Str(v string) String {
+	return String{V(v)}
+}
+
+func (s String) String() (String, error) {
+	return s, nil
+}
 
 func (s String) TryFrom(e Element) (String, error) {
-	if e.Type() != s.Type() {
-		return s, fmt.Errorf("not a string")
-	}
-	return e.(String), nil
+	return e.String()
 }
 
 func (s String) Type() ElementType {
@@ -154,14 +205,14 @@ func (s String) Decode(input *bufio.Reader) (String, error) {
 		return s, err
 	}
 
-	return String(buff.String()), nil
+	return Str(buff.String()), nil
 }
 
 func (bStr String) Encode() []byte {
 	var buff bytes.Buffer
-	buff.WriteString(strconv.Itoa(len(bStr)))
+	buff.WriteString(strconv.Itoa(len(bStr.Val)))
 	buff.WriteByte(LENGTH_DELIMITER)
-	buff.WriteString(string(bStr))
+	buff.WriteString(bStr.Val)
 	return buff.Bytes()
 }
 
@@ -187,13 +238,20 @@ func InferredTypeDecode(input *bufio.Reader) (Element, error) {
 	}
 }
 
-type List []Element
+type List struct {
+	DefEltVal[[]Element]
+}
+
+func Lst(elt []Element) List {
+	return List{V(elt)}
+}
+
+func (l List) List() (List, error) {
+	return l, nil
+}
 
 func (l List) TryFrom(e Element) (List, error) {
-	if e.Type() != l.Type() {
-		return l, fmt.Errorf("not a list")
-	}
-	return e.(List), nil
+	return e.List()
 }
 
 func (l List) Decode(input *bufio.Reader) (List, error) {
@@ -216,14 +274,14 @@ func (l List) Decode(input *bufio.Reader) (List, error) {
 		var lmnt Element
 		lmnt, err = InferredTypeDecode(input)
 		if err != nil {
-			return List(lst), err
+			return Lst(lst), err
 		}
 		if lmnt == nil { // end of sequence
 			break
 		}
 		lst = append(lst, lmnt)
 	}
-	return List(lst), err
+	return Lst(lst), err
 }
 
 func (bLst List) Type() ElementType {
@@ -233,20 +291,27 @@ func (bLst List) Type() ElementType {
 func (bLst List) Encode() []byte {
 	var buff bytes.Buffer
 	buff.WriteByte(LIST_START)
-	for _, elm := range bLst {
+	for _, elm := range bLst.Val {
 		buff.Write(elm.Encode())
 	}
 	buff.WriteByte(SEQ_END)
 	return buff.Bytes()
 }
 
-type Dictionary map[string]Element
+type Dictionary struct {
+	DefEltVal[map[string]Element]
+}
+
+func Dct(m map[string]Element) Dictionary {
+	return Dictionary{V(m)}
+}
+
+func (d Dictionary) Dictionary() (Dictionary, error) {
+	return d, nil
+}
 
 func (d Dictionary) TryFrom(e Element) (Dictionary, error) {
-	if e.Type() != d.Type() {
-		return d, fmt.Errorf("not a dictionary")
-	}
-	return e.(Dictionary), nil
+	return e.Dictionary()
 }
 
 func (d Dictionary) Decode(input *bufio.Reader) (Dictionary, error) {
@@ -263,7 +328,7 @@ func (d Dictionary) Decode(input *bufio.Reader) (Dictionary, error) {
 	for {
 		testPeek, err := input.Peek(1)
 		if err != nil {
-			return nil, err
+			return d, err
 		}
 
 		if testPeek[0] == SEQ_END {
@@ -272,20 +337,20 @@ func (d Dictionary) Decode(input *bufio.Reader) (Dictionary, error) {
 
 		key, err := Decode[String](input)
 		if err != nil {
-			return nil, err
+			return d, err
 		}
 
 		val, err := InferredTypeDecode(input)
 		if err != nil {
-			return nil, err
+			return d, err
 		}
 		if val == nil {
-			return nil, InvalidInputError{"key without value"}
+			return d, InvalidInputError{"key without value"}
 		}
-		dict[string(key)] = val
+		dict[key.Val] = val
 	}
 
-	return Dictionary(dict), nil
+	return Dct(dict), nil
 }
 
 func (bDct Dictionary) Type() ElementType {
@@ -295,8 +360,8 @@ func (bDct Dictionary) Type() ElementType {
 func (bDct Dictionary) Encode() []byte {
 	var buff bytes.Buffer
 	buff.WriteByte(DICT_START)
-	for k, v := range bDct {
-		buff.Write(String(k).Encode())
+	for k, v := range bDct.Val {
+		buff.Write(Str(k).Encode())
 		buff.Write(v.Encode())
 	}
 	buff.WriteByte(SEQ_END)
