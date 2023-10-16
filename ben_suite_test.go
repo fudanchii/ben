@@ -20,7 +20,7 @@ func TestBen(t *testing.T) {
 var _ = Describe("Bencode", func() {
 	Describe("Integer Type", func() {
 		It("can encode integer", func() {
-			Expect(NewInteger(12).Encode()).To(Equal([]byte("i12e")))
+			Expect(Integer(12).Encode()).To(Equal([]byte("i12e")))
 		})
 
 		Context("decoding integer", func() {
@@ -91,9 +91,9 @@ var _ = Describe("Bencode", func() {
 
 	Describe("List Type", func() {
 		It("can encode list", func() {
-			list := NewList([]Element{
-				NewInteger(42),
-				NewString("Hello"),
+			list := List([]Element{
+				Integer(42),
+				String("Hello"),
 			})
 			Expect(list.Encode()).To(Equal([]byte("li42e5:Helloe")))
 		})
@@ -159,9 +159,9 @@ var _ = Describe("Bencode", func() {
 
 	Describe("Dictionary type", func() {
 		It("can encode Dictionary", func() {
-			dict := NewDictionary(map[string]Element{
-				"answer":   NewInteger(42),
-				"question": NewString("to be determined"),
+			dict := Dictionary(map[string]Element{
+				"answer":   Integer(42),
+				"question": String("to be determined"),
 			})
 			Expect(dict.Encode()).To(Equal([]byte("d6:answeri42e8:question16:to be determinede")))
 		})

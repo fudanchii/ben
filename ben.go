@@ -43,10 +43,6 @@ func Decode[B Bencoder[B]](input *bufio.Reader) (B, error) {
 
 type Integer int64
 
-func NewInteger(i int64) Integer {
-	return Integer(i)
-}
-
 func (i Integer) TryFrom(e Element) (Integer, error) {
 	if e.Type() != i.Type() {
 		return i, fmt.Errorf("not an integer")
@@ -112,10 +108,6 @@ func (bInt Integer) Encode() []byte {
 }
 
 type String string
-
-func NewString(input string) String {
-	return String(input)
-}
 
 func (s String) TryFrom(e Element) (String, error) {
 	if e.Type() != s.Type() {
@@ -197,10 +189,6 @@ func InferredTypeDecode(input *bufio.Reader) (Element, error) {
 
 type List []Element
 
-func NewList(input []Element) List {
-	return List(input)
-}
-
 func (l List) TryFrom(e Element) (List, error) {
 	if e.Type() != l.Type() {
 		return l, fmt.Errorf("not a list")
@@ -253,10 +241,6 @@ func (bLst List) Encode() []byte {
 }
 
 type Dictionary map[string]Element
-
-func NewDictionary(input map[string]Element) Dictionary {
-	return Dictionary(input)
-}
 
 func (d Dictionary) TryFrom(e Element) (Dictionary, error) {
 	if e.Type() != d.Type() {
