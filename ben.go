@@ -16,6 +16,42 @@ const (
 	LENGTH_DELIMITER = ':'
 )
 
+type DefEltVal[T any] struct {
+	Val T
+}
+
+func V[T any](v T) DefEltVal[T] {
+	return DefEltVal[T]{v}
+}
+
+func (d DefEltVal[T]) String() (String, error) {
+	var s String
+	return s, TypeError{"Element is not a String"}
+}
+
+func (d DefEltVal[T]) Integer() (Integer, error) {
+	var i Integer
+	return i, TypeError{"Element is not an Integer"}
+}
+
+func (d DefEltVal[T]) List() (List, error) {
+	var l List
+	return l, TypeError{"Element is not a List"}
+}
+
+func (d DefEltVal[T]) Dictionary() (Dictionary, error) {
+	var di Dictionary
+	return di, TypeError{"Element is not a Dictionary"}
+}
+
+type TypeError struct {
+	msg string
+}
+
+func (t TypeError) Error() string {
+	return fmt.Sprintf("Type assertion error: %s", t.msg)
+}
+
 type ElementType int
 
 const (
@@ -30,34 +66,6 @@ type ElementValues interface {
 	Integer() (Integer, error)
 	List() (List, error)
 	Dictionary() (Dictionary, error)
-}
-
-type DefEltVal[T any] struct {
-	Val T
-}
-
-func V[T any](v T) DefEltVal[T] {
-	return DefEltVal[T]{v}
-}
-
-func (d DefEltVal[T]) String() (String, error) {
-	var s String
-	return s, fmt.Errorf("Element is not a String")
-}
-
-func (d DefEltVal[T]) Integer() (Integer, error) {
-	var i Integer
-	return i, fmt.Errorf("Element is not an Integer")
-}
-
-func (d DefEltVal[T]) List() (List, error) {
-	var l List
-	return l, fmt.Errorf("Element is not a List")
-}
-
-func (d DefEltVal[T]) Dictionary() (Dictionary, error) {
-	var di Dictionary
-	return di, fmt.Errorf("Element is not a Dictionary")
 }
 
 type Element interface {
@@ -111,7 +119,7 @@ func (i Integer) Decode(input *bufio.Reader) (Integer, error) {
 	}
 
 	if ch != INT_START {
-		return i, fmt.Errorf("input is not Integer")
+		return i, InvalidInputError{"input is not Integer"}
 	}
 
 	for {
@@ -267,7 +275,7 @@ func (l List) Decode(input *bufio.Reader) (List, error) {
 	}
 
 	if ch != LIST_START {
-		return l, fmt.Errorf("not a list type")
+		return l, InvalidInputError{"not a list type"}
 	}
 
 	for {
@@ -322,7 +330,7 @@ func (d Dictionary) Decode(input *bufio.Reader) (Dictionary, error) {
 	}
 
 	if ch != DICT_START {
-		return d, fmt.Errorf("not a dictionary")
+		return d, InvalidInputError{"not a dictionary"}
 	}
 
 	for {
