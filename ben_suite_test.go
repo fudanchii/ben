@@ -5,11 +5,10 @@ import (
 	"bytes"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	. "github.com/fudanchii/ben"
 	"github.com/fudanchii/infr"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 func TestBen(t *testing.T) {
@@ -100,20 +99,23 @@ var _ = Describe("Bencode", func() {
 
 		Context("decoding list", func() {
 			source := bytes.NewBufferString("li42ei100ei0ei12e4:namee")
-			bList, err := InferredTypeDecode(bufio.NewReader(source))
-			Expect(err).NotTo(HaveOccurred())
+			bList, fail := InferredTypeDecode(bufio.NewReader(source))
+			lElm, castErr := infr.TryInto[List](bList)
+
+			It("should not cause error", func() {
+				Expect(fail).NotTo(HaveOccurred())
+			})
+
+			It("should be able to cast without error", func() {
+				Expect(castErr).NotTo(HaveOccurred())
+			})
 
 			It("should have List type", func() {
 				Expect(bList.Type()).To(Equal(ListType))
 			})
 
-			lElm, err := infr.TryInto[List](bList)
-			It("should have []Element type for its data", func() {
-				Expect(err).NotTo(HaveOccurred())
-			})
-
 			It("should have 5 elements", func() {
-				Expect(len(lElm.Val)).To(Equal(5))
+				Expect(lElm.Val).To(HaveLen(5))
 			})
 
 			It("should returns 42 for the first element", func() {
@@ -144,7 +146,7 @@ var _ = Describe("Bencode", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should have the first two element", func() {
-				Expect(len(lst.Val)).To(Equal(2))
+				Expect(lst.Val).To(HaveLen(2))
 			})
 
 			It("should returns 234 for the first element", func() {
@@ -168,7 +170,11 @@ var _ = Describe("Bencode", func() {
 
 		Context("decoding dictionary", func() {
 			source := bytes.NewBufferString("d6:answeri42e8:question16:to be determinede")
+
 			bDict, err := InferredTypeDecode(bufio.NewReader(source))
+			Expect(err).NotTo(HaveOccurred())
+
+			d, err := infr.TryInto[Dictionary](bDict)
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should have dictionary type", func() {
@@ -176,20 +182,14 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should have 2 elements", func() {
-				d, err := infr.TryInto[Dictionary](bDict)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(d.Val)).To(Equal(2))
+				Expect(d.Val).To(HaveLen(2))
 			})
 
 			It("should have key: 'answer', with value: '42'", func() {
-				d, err := infr.TryInto[Dictionary](bDict)
-				Expect(err).NotTo(HaveOccurred())
 				Expect(d.Val["answer"]).To(Equal(Int(42)))
 			})
 
 			It("should have key: 'question', with value: 'to be determined'", func() {
-				d, err := infr.TryInto[Dictionary](bDict)
-				Expect(err).NotTo(HaveOccurred())
 				Expect(d.Val["question"]).To(Equal(Str("to be determined")))
 			})
 		})

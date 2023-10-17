@@ -3,17 +3,24 @@ package ben
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 )
 
 const (
-	DICT_START       = 'd'
-	INT_START        = 'i'
-	LIST_START       = 'l'
-	SEQ_END          = 'e'
-	LENGTH_DELIMITER = ':'
+	StartDict       = 'd'
+	StartInt        = 'i'
+	StartList       = 'l'
+	EndItemSeq      = 'e'
+	LengthDelimiter = ':'
+	tenth           = 10
+	digitMask       = 0x30
+)
+
+var (
+	errEndItemSequence = errors.New("end of item sequence")
 )
 
 type DefEltVal[T any] struct {
@@ -118,7 +125,7 @@ func (i Integer) Decode(input *bufio.Reader) (Integer, error) {
 		return i, err
 	}
 
-	if ch != INT_START {
+	if ch != StartInt {
 		return i, InvalidInputError{"input is not Integer"}
 	}
 
@@ -127,7 +134,7 @@ func (i Integer) Decode(input *bufio.Reader) (Integer, error) {
 		if err != nil {
 			return i, err
 		}
-		if ch == SEQ_END {
+		if ch == EndItemSeq {
 			break
 		}
 		if ch == '-' && rInt == 0 {
@@ -135,9 +142,9 @@ func (i Integer) Decode(input *bufio.Reader) (Integer, error) {
 			continue
 		}
 
-		it := int(ch) - 0x30
+		it := int(ch) - digitMask
 		if 0 <= it && it <= 9 {
-			rInt = rInt*int64(10) + int64(it)
+			rInt = rInt*int64(tenth) + int64(it)
 			continue
 		}
 
@@ -151,11 +158,11 @@ func (i Integer) Decode(input *bufio.Reader) (Integer, error) {
 	return Int(rInt), nil
 }
 
-func (bInt Integer) Encode() []byte {
+func (i Integer) Encode() []byte {
 	var buff bytes.Buffer
-	buff.WriteByte(INT_START)
-	buff.WriteString(strconv.FormatInt(bInt.Val, 10))
-	buff.WriteByte(SEQ_END)
+	buff.WriteByte(StartInt)
+	buff.WriteString(strconv.FormatInt(i.Val, 10))
+	buff.WriteByte(EndItemSeq)
 	return buff.Bytes()
 }
 
@@ -185,21 +192,22 @@ func (s String) Decode(input *bufio.Reader) (String, error) {
 		length []byte
 		err    error
 		sLen   int64
+		ch     byte
 	)
 
-	first_token, err := input.ReadByte()
+	firstToken, err := input.ReadByte()
 	if err != nil {
 		return s, err
 	}
 
-	length = append(length, first_token)
+	length = append(length, firstToken)
 
 	for {
-		ch, err := input.ReadByte()
+		ch, err = input.ReadByte()
 		if err != nil {
 			return s, err
 		}
-		if ch == LENGTH_DELIMITER {
+		if ch == LengthDelimiter {
 			break
 		}
 		length = append(length, ch)
@@ -209,40 +217,40 @@ func (s String) Decode(input *bufio.Reader) (String, error) {
 		return s, err
 	}
 
-	if _, err := io.CopyN(&buff, input, sLen); err != nil {
+	if _, err = io.CopyN(&buff, input, sLen); err != nil {
 		return s, err
 	}
 
 	return Str(buff.String()), nil
 }
 
-func (bStr String) Encode() []byte {
+func (s String) Encode() []byte {
 	var buff bytes.Buffer
-	buff.WriteString(strconv.Itoa(len(bStr.Val)))
-	buff.WriteByte(LENGTH_DELIMITER)
-	buff.WriteString(bStr.Val)
+	buff.WriteString(strconv.Itoa(len(s.Val)))
+	buff.WriteByte(LengthDelimiter)
+	buff.WriteString(s.Val)
 	return buff.Bytes()
 }
 
 func InferredTypeDecode(input *bufio.Reader) (Element, error) {
-	current_token, err := input.Peek(1)
+	currentToken, err := input.Peek(1)
 	if err != nil {
 		return nil, err
 	}
 
-	switch current_token[0] {
-	case DICT_START:
+	switch currentToken[0] {
+	case StartDict:
 		return Decode[Dictionary](input)
-	case INT_START:
+	case StartInt:
 		return Decode[Integer](input)
-	case LIST_START:
+	case StartList:
 		return Decode[List](input)
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return Decode[String](input)
-	case SEQ_END:
-		return nil, nil
+	case EndItemSeq:
+		return nil, errEndItemSequence
 	default:
-		return nil, InvalidInputError{}
+		return nil, InvalidInputError{"should not reach here"}
 	}
 }
 
@@ -274,14 +282,14 @@ func (l List) Decode(input *bufio.Reader) (List, error) {
 		return l, err
 	}
 
-	if ch != LIST_START {
+	if ch != StartList {
 		return l, InvalidInputError{"not a list type"}
 	}
 
 	for {
 		var lmnt Element
 		lmnt, err = InferredTypeDecode(input)
-		if err != nil {
+		if err != nil && !errors.Is(err, errEndItemSequence) {
 			return Lst(lst), err
 		}
 		if lmnt == nil { // end of sequence
@@ -289,20 +297,20 @@ func (l List) Decode(input *bufio.Reader) (List, error) {
 		}
 		lst = append(lst, lmnt)
 	}
-	return Lst(lst), err
+	return Lst(lst), nil
 }
 
-func (bLst List) Type() ElementType {
+func (l List) Type() ElementType {
 	return ListType
 }
 
-func (bLst List) Encode() []byte {
+func (l List) Encode() []byte {
 	var buff bytes.Buffer
-	buff.WriteByte(LIST_START)
-	for _, elm := range bLst.Val {
+	buff.WriteByte(StartList)
+	for _, elm := range l.Val {
 		buff.Write(elm.Encode())
 	}
-	buff.WriteByte(SEQ_END)
+	buff.WriteByte(EndItemSeq)
 	return buff.Bytes()
 }
 
@@ -323,32 +331,41 @@ func (d Dictionary) TryFrom(e Element) (Dictionary, error) {
 }
 
 func (d Dictionary) Decode(input *bufio.Reader) (Dictionary, error) {
+	var (
+		err      error
+		testPeek []byte
+		ch       byte
+		key      String
+		val      Element
+	)
+
 	dict := make(map[string]Element)
-	ch, err := input.ReadByte()
+
+	ch, err = input.ReadByte()
 	if err != nil {
 		return d, err
 	}
 
-	if ch != DICT_START {
+	if ch != StartDict {
 		return d, InvalidInputError{"not a dictionary"}
 	}
 
 	for {
-		testPeek, err := input.Peek(1)
+		testPeek, err = input.Peek(1)
 		if err != nil {
 			return d, err
 		}
 
-		if testPeek[0] == SEQ_END {
+		if testPeek[0] == EndItemSeq {
 			break
 		}
 
-		key, err := Decode[String](input)
+		key, err = Decode[String](input)
 		if err != nil {
 			return d, err
 		}
 
-		val, err := InferredTypeDecode(input)
+		val, err = InferredTypeDecode(input)
 		if err != nil {
 			return d, err
 		}
@@ -361,18 +378,18 @@ func (d Dictionary) Decode(input *bufio.Reader) (Dictionary, error) {
 	return Dct(dict), nil
 }
 
-func (bDct Dictionary) Type() ElementType {
+func (d Dictionary) Type() ElementType {
 	return DictType
 }
 
-func (bDct Dictionary) Encode() []byte {
+func (d Dictionary) Encode() []byte {
 	var buff bytes.Buffer
-	buff.WriteByte(DICT_START)
-	for k, v := range bDct.Val {
+	buff.WriteByte(StartDict)
+	for k, v := range d.Val {
 		buff.Write(Str(k).Encode())
 		buff.Write(v.Encode())
 	}
-	buff.WriteByte(SEQ_END)
+	buff.WriteByte(EndItemSeq)
 	return buff.Bytes()
 }
 
