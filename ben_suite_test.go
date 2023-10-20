@@ -7,7 +7,7 @@ import (
 
 	. "github.com/fudanchii/ben"
 	"github.com/fudanchii/infr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
