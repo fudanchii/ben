@@ -1,7 +1,6 @@
 package ben
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -68,6 +67,12 @@ const (
 	DictType
 )
 
+type ReadPeeker interface {
+	io.ByteReader
+	io.Reader
+	Peek(int) ([]byte, error)
+}
+
 type ElementValues interface {
 	String() (String, error)
 	Integer() (Integer, error)
@@ -83,12 +88,12 @@ type Element interface {
 }
 
 type Bencoder[T Element] interface {
-	Decode(*bufio.Reader) (T, error)
+	Decode(ReadPeeker) (T, error)
 
 	Element
 }
 
-func Decode[B Bencoder[B]](input *bufio.Reader) (B, error) {
+func Decode[B Bencoder[B]](input ReadPeeker) (B, error) {
 	var b B
 	return b.Decode(input)
 }
@@ -113,7 +118,7 @@ func (i Integer) Type() ElementType {
 	return IntType
 }
 
-func (i Integer) Decode(input *bufio.Reader) (Integer, error) {
+func (i Integer) Decode(input ReadPeeker) (Integer, error) {
 	var (
 		ch    byte
 		rInt  int64
@@ -186,7 +191,7 @@ func (s String) Type() ElementType {
 	return StringType
 }
 
-func (s String) Decode(input *bufio.Reader) (String, error) {
+func (s String) Decode(input ReadPeeker) (String, error) {
 	var (
 		buff   bytes.Buffer
 		length []byte
@@ -232,7 +237,7 @@ func (s String) Encode() []byte {
 	return buff.Bytes()
 }
 
-func InferredTypeDecode(input *bufio.Reader) (Element, error) {
+func InferredTypeDecode(input ReadPeeker) (Element, error) {
 	currentToken, err := input.Peek(1)
 	if err != nil {
 		return nil, err
@@ -270,7 +275,7 @@ func (l List) TryFrom(e Element) (List, error) {
 	return e.List()
 }
 
-func (l List) Decode(input *bufio.Reader) (List, error) {
+func (l List) Decode(input ReadPeeker) (List, error) {
 	var (
 		lst []Element
 		err error
@@ -330,7 +335,7 @@ func (d Dictionary) TryFrom(e Element) (Dictionary, error) {
 	return e.Dictionary()
 }
 
-func (d Dictionary) Decode(input *bufio.Reader) (Dictionary, error) {
+func (d Dictionary) Decode(input ReadPeeker) (Dictionary, error) {
 	var (
 		err      error
 		testPeek []byte
