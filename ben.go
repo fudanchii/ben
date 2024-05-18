@@ -50,6 +50,10 @@ func (d DefEltVal[T]) Dictionary() (Dictionary, error) {
 	return di, TypeError{"Element is not a Dictionary"}
 }
 
+func (d DefEltVal[T]) Bytes() ([]byte, error) {
+	return nil, TypeError{"Element does not implement Bytes"}
+}
+
 type TypeError struct {
 	msg string
 }
@@ -74,6 +78,7 @@ type ReadPeeker interface {
 }
 
 type ElementValues interface {
+	Bytes() ([]byte, error)
 	String() (String, error)
 	Integer() (Integer, error)
 	List() (List, error)
@@ -112,6 +117,10 @@ func (i Integer) Integer() (Integer, error) {
 
 func (i Integer) TryFrom(e Element) (Integer, error) {
 	return e.Integer()
+}
+
+func (i Integer) Into() int64 {
+	return i.Val
 }
 
 func (i Integer) Type() ElementType {
@@ -183,8 +192,16 @@ func (s String) String() (String, error) {
 	return s, nil
 }
 
+func (s String) Bytes() ([]byte, error) {
+	return []byte(s.Val), nil
+}
+
 func (s String) TryFrom(e Element) (String, error) {
 	return e.String()
+}
+
+func (s String) Into() string {
+	return s.Val
 }
 
 func (s String) Type() ElementType {

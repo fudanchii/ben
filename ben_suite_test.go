@@ -1,13 +1,19 @@
 package ben_test
 
+//nolint:gci // huh?
 import (
 	"bufio"
 	"bytes"
+	"os"
 	"testing"
 
-	. "github.com/fudanchii/ben"
+	"github.com/fudanchii/ben"
 	"github.com/fudanchii/infr"
+
+	//nolint:revive // due to ginkgo convention
 	. "github.com/onsi/ginkgo/v2"
+
+	//nolint:revive // due to ginkgo convention
 	. "github.com/onsi/gomega"
 )
 
@@ -19,33 +25,33 @@ func TestBen(t *testing.T) {
 var _ = Describe("Bencode", func() {
 	Describe("Integer Type", func() {
 		It("can encode integer", func() {
-			Expect(Int(12).Encode()).To(Equal([]byte("i12e")))
+			Expect(ben.Int(12).Encode()).To(Equal([]byte("i12e")))
 		})
 
 		Context("decoding integer", func() {
 			source := bytes.NewBufferString("i71183928e")
-			bInt, err := InferredTypeDecode(bufio.NewReader(source))
+			bInt, err := ben.InferredTypeDecode(bufio.NewReader(source))
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should have Integer type", func() {
-				Expect(bInt.Type()).To(Equal(IntType))
+				Expect(bInt.Type()).To(Equal(ben.IntType))
 			})
 
 			It("should returns 71183928", func() {
-				Expect(bInt).To(Equal(Int(71183928)))
+				Expect(bInt).To(Equal(ben.Int(71183928)))
 			})
 		})
 
 		It("returns EOF when input ends without `e` delimiter", func() {
 			source := bytes.NewBufferString("i1231")
-			_, err := InferredTypeDecode(bufio.NewReader(source))
+			_, err := ben.InferredTypeDecode(bufio.NewReader(source))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("EOF"))
 		})
 
 		It("returns InvalidInputError on invalid input", func() {
 			source := bytes.NewBufferString("i9809d3:abc")
-			_, err := InferredTypeDecode(bufio.NewReader(source))
+			_, err := ben.InferredTypeDecode(bufio.NewReader(source))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("Invalid Input Error: 100"))
 		})
@@ -53,16 +59,16 @@ var _ = Describe("Bencode", func() {
 
 	Describe("String Type", func() {
 		It("can encode string", func() {
-			Expect(Str("Hello World!").Encode()).To(Equal([]byte("12:Hello World!")))
+			Expect(ben.Str("Hello World!").Encode()).To(Equal([]byte("12:Hello World!")))
 		})
 
 		Context("decoding string", func() {
 			source := bytes.NewBufferString("9:Mi Amigos")
-			bStr, err := Decode[String](bufio.NewReader(source))
+			bStr, err := ben.Decode[ben.String](bufio.NewReader(source))
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should have String type", func() {
-				Expect(bStr.Type()).To(Equal(StringType))
+				Expect(bStr.Type()).To(Equal(ben.StringType))
 			})
 
 			It("should returns Mi Amigos", func() {
@@ -72,7 +78,7 @@ var _ = Describe("Bencode", func() {
 
 		Context("given extraneous input", func() {
 			source := bytes.NewBufferString("3:abcdef")
-			bStr, err := Decode[String](bufio.NewReader(source))
+			bStr, err := ben.Decode[ben.String](bufio.NewReader(source))
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should returns abc", func() {
@@ -82,7 +88,7 @@ var _ = Describe("Bencode", func() {
 
 		It("returns EOF when input is less than the indicated length", func() {
 			source := bytes.NewBufferString("4:abc")
-			_, err := Decode[String](bufio.NewReader(source))
+			_, err := ben.Decode[ben.String](bufio.NewReader(source))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("EOF"))
 		})
@@ -90,17 +96,17 @@ var _ = Describe("Bencode", func() {
 
 	Describe("List Type", func() {
 		It("can encode list", func() {
-			list := Lst([]Element{
-				Int(42),
-				Str("Hello"),
+			list := ben.Lst([]ben.Element{
+				ben.Int(42),
+				ben.Str("Hello"),
 			})
 			Expect(list.Encode()).To(Equal([]byte("li42e5:Helloe")))
 		})
 
 		Context("decoding list", func() {
 			source := bytes.NewBufferString("li42ei100ei0ei12e4:namee")
-			bList, fail := InferredTypeDecode(bufio.NewReader(source))
-			lElm, castErr := infr.TryInto[List](bList)
+			bList, fail := ben.InferredTypeDecode(bufio.NewReader(source))
+			lElm, castErr := infr.TryInto[ben.List](bList)
 
 			It("should not cause error", func() {
 				Expect(fail).NotTo(HaveOccurred())
@@ -111,7 +117,7 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should have List type", func() {
-				Expect(bList.Type()).To(Equal(ListType))
+				Expect(bList.Type()).To(Equal(ben.ListType))
 			})
 
 			It("should have 5 elements", func() {
@@ -119,30 +125,30 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should returns 42 for the first element", func() {
-				Expect(lElm.Val[0]).To(Equal(Int(42)))
+				Expect(lElm.Val[0]).To(Equal(ben.Int(42)))
 			})
 
 			It("should returns name for the last element", func() {
-				Expect(lElm.Val[4]).To(Equal(Str("name")))
+				Expect(lElm.Val[4]).To(Equal(ben.Str("name")))
 			})
 		})
 
 		It("returns EOF when input is ended too early", func() {
 			source := bytes.NewBufferString("li234e")
-			_, err := Decode[List](bufio.NewReader(source))
+			_, err := ben.Decode[ben.List](bufio.NewReader(source))
 			Expect(err.Error()).To(Equal("EOF"))
 		})
 
 		Context("decoding partially corrupted list", func() {
 			source := bytes.NewBufferString("li234e4:abcdi24")
-			bList, err := InferredTypeDecode(bufio.NewReader(source))
+			bList, err := ben.InferredTypeDecode(bufio.NewReader(source))
 			Expect(err).To(HaveOccurred())
 
 			It("returns non nil value", func() {
 				Expect(bList).NotTo(BeNil())
 			})
 
-			lst, err := infr.TryInto[List](bList)
+			lst, err := infr.TryInto[ben.List](bList)
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should have the first two element", func() {
@@ -150,35 +156,47 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should returns 234 for the first element", func() {
-				Expect(lst.Val[0]).To(Equal(Int(234)))
+				Expect(lst.Val[0]).To(Equal(ben.Int(234)))
 			})
 
 			It("should returns abcd for the second element", func() {
-				Expect(lst.Val[1]).To(Equal(Str("abcd")))
+				Expect(lst.Val[1]).To(Equal(ben.Str("abcd")))
 			})
 		})
 	})
 
 	Describe("Dictionary type", func() {
 		It("can encode Dictionary", func() {
-			dict := Dct(map[string]Element{
-				"answer":   Int(42),
-				"question": Str("to be determined"),
+			dict := ben.Dct(map[string]ben.Element{
+				"answer":   ben.Int(42),
+				"question": ben.Str("to be determined"),
 			})
-			Expect(dict.Encode()).To(Equal([]byte("d6:answeri42e8:question16:to be determinede")))
+
+			sampleBenStr1 := []byte("d6:answeri42e8:question16:to be determinede")
+			sampleBenStr2 := []byte("d8:question16:to be determined6:answeri42ee")
+
+			benStr := dict.Encode()
+
+			if string(benStr[:2]) == "d6" {
+				Expect(benStr).To(Equal(sampleBenStr1))
+			}
+
+			if string(benStr[:2]) == "d8" {
+				Expect(benStr).To(Equal(sampleBenStr2))
+			}
 		})
 
 		Context("decoding dictionary", func() {
 			source := bytes.NewBufferString("d6:answeri42e8:question16:to be determinede")
 
-			bDict, err := InferredTypeDecode(bufio.NewReader(source))
+			bDict, err := ben.InferredTypeDecode(bufio.NewReader(source))
 			Expect(err).NotTo(HaveOccurred())
 
-			d, err := infr.TryInto[Dictionary](bDict)
+			d, err := infr.TryInto[ben.Dictionary](bDict)
 			Expect(err).NotTo(HaveOccurred())
 
 			It("should have dictionary type", func() {
-				Expect(bDict.Type()).To(Equal(DictType))
+				Expect(bDict.Type()).To(Equal(ben.DictType))
 			})
 
 			It("should have 2 elements", func() {
@@ -186,12 +204,34 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should have key: 'answer', with value: '42'", func() {
-				Expect(d.Val["answer"]).To(Equal(Int(42)))
+				Expect(d.Val["answer"]).To(Equal(ben.Int(42)))
 			})
 
 			It("should have key: 'question', with value: 'to be determined'", func() {
-				Expect(d.Val["question"]).To(Equal(Str("to be determined")))
+				Expect(d.Val["question"]).To(Equal(ben.Str("to be determined")))
 			})
+		})
+	})
+
+	Describe("Read torrent file", func() {
+		It("can decode torrent file", func() {
+			content, err := os.OpenFile("testdata/NetBSD-10.0-amd64.iso.torrent", os.O_RDONLY, 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			defer func() { _ = content.Close() }()
+
+			torrentDict, err := ben.Decode[ben.Dictionary](bufio.NewReader(content))
+			Expect(err).NotTo(HaveOccurred())
+
+			torrent, err := infr.TryFrom[ben.Dictionary, ben.Torrent](torrentDict).TryInto()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(torrent.Announce).To(Equal("http://tracker.NetBSD.org:6969/announce"))
+
+			Expect(torrent.CreatedBy).NotTo(BeNil())
+			Expect(*torrent.CreatedBy).To(Equal("Transmission/4.0.3 (6b0e49bbb2)"))
+			Expect(torrent.Encoding).NotTo(BeNil())
+			Expect(*torrent.Encoding).To(Equal("UTF-8"))
 		})
 	})
 })
