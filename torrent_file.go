@@ -2,7 +2,6 @@ package ben
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -35,6 +34,26 @@ type valueSetterMap map[reflect.Kind]valueSetterFunc
 type valueSetterFunc func(valueSetterMap, reflect.Value, Element) error
 
 var (
+	setStructValue = map[string]valueSetterFunc{
+		"time.Time": func(setter valueSetterMap, obj reflect.Value, l Element) error {
+			// We will assume all time.Time data was serialized to UNIX epoch time.
+			v, err := l.Integer()
+			if err != nil {
+				return err
+			}
+
+			timeVal := time.Unix(v.Into(), 0)
+
+			obj.Set(reflect.ValueOf(timeVal))
+
+			return nil
+		},
+
+		"github.com/fudanchii/ben.Info": func(setter valueSetterMap, obj reflect.Value, l Element) error {
+			return nil
+		},
+	}
+
 	setValue = valueSetterMap{
 		reflect.Int64: func(_ valueSetterMap, obj reflect.Value, l Element) error {
 			val, err := l.Integer()
@@ -59,8 +78,16 @@ var (
 		},
 
 		reflect.Struct: func(setter valueSetterMap, obj reflect.Value, l Element) error {
-			fmt.Println(obj.Type().Name())
-			return nil
+			objType := obj.Type()
+			fqTypeName := objType.PkgPath() + "." + objType.Name()
+
+			structValueSetter, ok := setStructValue[fqTypeName]
+
+			if !ok {
+				return errTypeNotSupported
+			}
+
+			return structValueSetter(setter, obj, l)
 		},
 
 		reflect.Pointer: func(setter valueSetterMap, obj reflect.Value, l Element) error {

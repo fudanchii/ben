@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/fudanchii/ben"
 	"github.com/fudanchii/infr"
@@ -230,8 +231,16 @@ var _ = Describe("Bencode", func() {
 
 			Expect(torrent.CreatedBy).NotTo(BeNil())
 			Expect(*torrent.CreatedBy).To(Equal("Transmission/4.0.3 (6b0e49bbb2)"))
+
 			Expect(torrent.Encoding).NotTo(BeNil())
 			Expect(*torrent.Encoding).To(Equal("UTF-8"))
+
+			Expect(torrent.CreationDate).NotTo(BeNil())
+
+			ts, err := time.Parse(time.RFC3339, "2024-03-30T17:17:24+09:00")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(*torrent.CreationDate).To(Equal(ts))
 		})
 	})
 })
