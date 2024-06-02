@@ -215,32 +215,63 @@ var _ = Describe("Bencode", func() {
 	})
 
 	Describe("Read torrent file", func() {
-		It("can decode torrent file", func() {
+		Context("decoding torrent file", func() {
 			content, err := os.OpenFile("testdata/NetBSD-10.0-amd64.iso.torrent", os.O_RDONLY, 0)
-			Expect(err).NotTo(HaveOccurred())
+			It("should read test data without error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			defer func() { _ = content.Close() }()
 
 			torrentDict, err := ben.Decode[ben.Dictionary](bufio.NewReader(content))
-			Expect(err).NotTo(HaveOccurred())
+			It("should decode file content without error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			torrent, err := infr.TryFrom[ben.Dictionary, ben.Torrent](torrentDict).TryInto()
-			Expect(err).NotTo(HaveOccurred())
+			It("should be able to cast ben Dict type to Torrent struct without error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
-			Expect(torrent.Announce).To(Equal("http://tracker.NetBSD.org:6969/announce"))
+			It("should have the correct 'announce' value", func() {
+				Expect(torrent.Announce).To(Equal("http://tracker.NetBSD.org:6969/announce"))
+			})
 
-			Expect(torrent.CreatedBy).NotTo(BeNil())
-			Expect(*torrent.CreatedBy).To(Equal("Transmission/4.0.3 (6b0e49bbb2)"))
+			It("should have the correct 'created by' value", func() {
+				Expect(torrent.CreatedBy).NotTo(BeNil())
+				Expect(*torrent.CreatedBy).To(Equal("Transmission/4.0.3 (6b0e49bbb2)"))
+			})
 
-			Expect(torrent.Encoding).NotTo(BeNil())
-			Expect(*torrent.Encoding).To(Equal("UTF-8"))
+			It("should have the correct 'encoding' value", func() {
+				Expect(torrent.Encoding).NotTo(BeNil())
+				Expect(*torrent.Encoding).To(Equal("UTF-8"))
+			})
 
-			Expect(torrent.CreationDate).NotTo(BeNil())
+			It("should  have the correct 'creation date' value", func() {
+				Expect(torrent.CreationDate).NotTo(BeNil())
 
-			ts, err := time.Parse(time.RFC3339, "2024-03-30T17:17:24+09:00")
-			Expect(err).NotTo(HaveOccurred())
+				ts, err := time.Parse(time.RFC3339, "2024-03-30T17:17:24+09:00")
+				Expect(err).NotTo(HaveOccurred())
 
-			Expect(*torrent.CreationDate).To(Equal(ts))
+				Expect(*torrent.CreationDate).To(Equal(ts))
+			})
+
+			It("should have the correct 'info.name' value", func() {
+				Expect(torrent.Info.Name).To(Equal("NetBSD-10.0-amd64.iso"))
+			})
+
+			It("should have the correct 'info.length' value", func() {
+				Expect(torrent.Info.Length).To(Equal(int64(652652544)))
+			})
+
+			It("should have the correct 'info.piece_length' value", func() {
+				Expect(torrent.Info.PieceLength).To(Equal(int64(524288)))
+			})
+
+			It("should have the correct 'info.pieces' value", func() {
+				Expect(len(torrent.Info.Pieces)).To(Equal(1245))
+				Expect(torrent.Info.Pieces[0]).To(Equal(ben.SHA1("\x9a\xe7\x47\x53\x58\x35\x0c\x00\x25\x86\xfe\x2c\x48\x4c\x6c\x62\x66\x10\xb2\x9d")))
+			})
 		})
 	})
 })

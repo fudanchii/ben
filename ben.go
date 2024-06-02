@@ -64,6 +64,21 @@ func (t TypeError) Error() string {
 
 type ElementType int
 
+func (e ElementType) String() string {
+	switch e {
+	case IntType:
+		return "Int"
+	case StringType:
+		return "String"
+	case ListType:
+		return "List"
+	case DictType:
+		return "Dictionary"
+	}
+
+	return "[Invalid]"
+}
+
 const (
 	IntType ElementType = iota
 	StringType

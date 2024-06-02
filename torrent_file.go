@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/fudanchii/infr"
 )
 
 type Torrent struct {
@@ -15,6 +17,10 @@ type Torrent struct {
 	Encoding     *string    `ben:"encoding,omitempty"`
 }
 
+func (t Torrent) TryFrom(d Dictionary) (Torrent, error) {
+	return castFromDictionaryInto[Torrent](d)
+}
+
 type Info struct {
 	Name        string `ben:"name"`
 	Length      int64  `ben:"length"`
@@ -23,14 +29,23 @@ type Info struct {
 	Files       []File `ben:"files,omitempty"`
 }
 
+func (_ Info) TryFrom(d Dictionary) (Info, error) {
+	return castFromDictionaryInto[Info](d)
+}
+
 type File struct {
 	Length int64    `ben:"length"`
 	Path   []string `ben:"path"`
 }
 
+func (_ File) TryFrom(d Dictionary) (File, error) {
+	return castFromDictionaryInto[File](d)
+}
+
 type SHA1 []byte
 
 type valueSetterMap map[reflect.Kind]valueSetterFunc
+
 type valueSetterFunc func(valueSetterMap, reflect.Value, Element) error
 
 var (
@@ -49,7 +64,26 @@ var (
 			return nil
 		},
 
-		"github.com/fudanchii/ben.Info": func(setter valueSetterMap, obj reflect.Value, l Element) error {
+		"github.com/fudanchii/ben.Info": localStructSetter,
+		"github.com/fudanchii/ben.File": localStructSetter,
+		"github.com/fudanchii/ben.SHA1": func(setter valueSetterMap, obj reflect.Value, l Element) error {
+			lval, err := l.String()
+			if err != nil {
+				return err
+			}
+
+			hashes := []byte(lval.Into())
+			hashesCount := len(hashes) / 20 // 160 / 8 bytes = 20
+
+			start := 0
+			if obj.Type().Kind() == reflect.Slice {
+				obj.Set(reflect.MakeSlice(obj.Type(), hashesCount, hashesCount))
+				for i := 0; i < hashesCount; i++ {
+					obj.Index(i).Set(reflect.ValueOf(hashes[start : start+20]))
+					start += 20
+				}
+			}
+
 			return nil
 		},
 	}
@@ -79,7 +113,7 @@ var (
 
 		reflect.Struct: func(setter valueSetterMap, obj reflect.Value, l Element) error {
 			objType := obj.Type()
-			fqTypeName := objType.PkgPath() + "." + objType.Name()
+			fqTypeName := fullyQualifiedTypeName(objType)
 
 			structValueSetter, ok := setStructValue[fqTypeName]
 
@@ -95,44 +129,116 @@ var (
 				obj.Set(reflect.New(obj.Type().Elem()))
 			}
 
-			setterFunc, ok := setter[obj.Type().Elem().Kind()]
-
+			fqTypeName := fullyQualifiedTypeName(obj.Type().Elem())
+			setterFunc, ok := setStructValue[fqTypeName]
 			if !ok {
-				return errTypeNotSupported
+				setterFunc, ok = setter[obj.Type().Elem().Kind()]
+				if !ok {
+					return errTypeNotSupported
+				}
 			}
 
 			return setterFunc(setter, obj.Elem(), l)
 		},
+
+		reflect.Slice: func(setter valueSetterMap, obj reflect.Value, l Element) error {
+			if obj.IsNil() {
+				obj.Set(reflect.MakeSlice(obj.Type(), 0, 0))
+			}
+
+			// slice has a very specific behavior:
+			//   - []byte handled as one assignment, treated similar to string
+			//   - other elem type will be assigned in an iteration
+			//   - nested slice will be recursed, but still assigned under iteration
+			fqTypeName := fullyQualifiedTypeName(obj.Type().Elem())
+			setterFunc, ok := setStructValue[fqTypeName]
+			if ok {
+				return setterFunc(setter, obj, l)
+			}
+
+			elemType := obj.Type().Elem().Kind()
+			switch elemType {
+			// []byte
+			case reflect.Uint8:
+				return setter[reflect.String](setter, obj, l)
+
+			case reflect.Uint64, reflect.String, reflect.Struct, reflect.Pointer, reflect.Slice:
+				list, err := l.List()
+				if err != nil {
+					return err
+				}
+
+				for idx := 0; idx < len(list.Val); idx++ {
+					err := setter[elemType](setter, obj.Index(idx), list.Val[idx])
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			return nil
+		},
 	}
 
-	errTypeNotSupported = errors.New("This type is not supported.")
+	errTypeNotSupported = errors.New("this type is not supported")
 )
 
-func (t Torrent) TryFrom(d Dictionary) (Torrent, error) {
-	torrentType := reflect.TypeOf(t)
-	torrentStruct := reflect.ValueOf(&t).Elem()
+func localStructSetter(setter valueSetterMap, obj reflect.Value, l Element) error {
+	dict, err := l.Dictionary()
+	if err != nil {
+		return err
+	}
 
-	numField := torrentType.NumField()
+	info, err := infr.TryFrom[Dictionary, Info](dict).TryInto()
+	if err != nil {
+		return err
+	}
+
+	obj.Set(reflect.ValueOf(info))
+	return nil
+}
+
+func castFromDictionaryInto[T infr.TryFromType[Dictionary, T]](dict Dictionary) (T, error) {
+	var t T
+
+	objType := reflect.TypeOf(t)
+	objStruct := reflect.ValueOf(&t).Elem()
+
+	numField := objType.NumField()
 
 	for i := 0; i < numField; i++ {
-		field := torrentType.Field(i)
-		fieldVal := torrentStruct.Field(i)
+		field := objType.Field(i)
+		fieldVal := objStruct.Field(i)
 
 		if !field.IsExported() {
 			continue
 		}
 
-		tag := strings.SplitN(field.Tag.Get("ben"), ",", 2)
-		val := d.Val[tag[0]]
+		fqTypeName := fullyQualifiedTypeName(field.Type)
+		setterFunc, ok := setStructValue[fqTypeName]
 
-		setterFunc, ok := setValue[fieldVal.Kind()]
 		if !ok {
-			return t, errTypeNotSupported
+			setterFunc, ok = setValue[fieldVal.Kind()]
+			if !ok {
+				return t, errTypeNotSupported
+			}
 		}
+
+		tag := strings.SplitN(field.Tag.Get("ben"), ",", 2)
+		val, present := dict.Val[tag[0]]
+
+		if !present && tag[1] == "omitempty" {
+			continue
+		}
+
 		if err := setterFunc(setValue, fieldVal, val); err != nil {
 			return t, err
 		}
 	}
 
 	return t, nil
+}
+
+func fullyQualifiedTypeName(t reflect.Type) string {
+	return t.PkgPath() + "." + t.Name()
 }
