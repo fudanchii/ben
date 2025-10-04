@@ -250,8 +250,8 @@ var _ = Describe("Bencode", func() {
 			It("should  have the correct 'creation date' value", func() {
 				Expect(torrent.CreationDate).NotTo(BeNil())
 
-				ts, err := time.Parse(time.RFC3339, "2024-03-30T17:17:24+09:00")
-				Expect(err).NotTo(HaveOccurred())
+				ts, parseErr := time.Parse(time.RFC3339, "2024-03-30T17:17:24+09:00")
+				Expect(parseErr).NotTo(HaveOccurred())
 
 				Expect(*torrent.CreationDate).To(Equal(ts))
 			})
@@ -269,8 +269,9 @@ var _ = Describe("Bencode", func() {
 			})
 
 			It("should have the correct 'info.pieces' value", func() {
-				Expect(len(torrent.Info.Pieces)).To(Equal(1245))
-				Expect(torrent.Info.Pieces[0]).To(Equal(ben.SHA1("\x9a\xe7\x47\x53\x58\x35\x0c\x00\x25\x86\xfe\x2c\x48\x4c\x6c\x62\x66\x10\xb2\x9d")))
+				Expect(torrent.Info.Pieces).To(HaveLen(1245))
+				Expect(torrent.Info.Pieces[0]).
+					To(Equal(ben.SHA1("\x9a\xe7\x47\x53\x58\x35\x0c\x00\x25\x86\xfe\x2c\x48\x4c\x6c\x62\x66\x10\xb2\x9d")))
 			})
 		})
 	})

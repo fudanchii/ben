@@ -29,7 +29,7 @@ type Info struct {
 	Files       []File `ben:"files,omitempty"`
 }
 
-func (_ Info) TryFrom(d Dictionary) (Info, error) {
+func (Info) TryFrom(d Dictionary) (Info, error) {
 	return castFromDictionaryInto[Info](d)
 }
 
@@ -38,7 +38,7 @@ type File struct {
 	Path   []string `ben:"path"`
 }
 
-func (_ File) TryFrom(d Dictionary) (File, error) {
+func (File) TryFrom(d Dictionary) (File, error) {
 	return castFromDictionaryInto[File](d)
 }
 
@@ -48,9 +48,9 @@ type valueSetterMap map[reflect.Kind]valueSetterFunc
 
 type valueSetterFunc func(valueSetterMap, reflect.Value, Element) error
 
-var (
-	setStructValue = map[string]valueSetterFunc{
-		"time.Time": func(setter valueSetterMap, obj reflect.Value, l Element) error {
+func setStructValue() map[string]valueSetterFunc {
+	return map[string]valueSetterFunc{
+		"time.Time": func(_ valueSetterMap, obj reflect.Value, l Element) error {
 			// We will assume all time.Time data was serialized to UNIX epoch time.
 			v, err := l.Integer()
 			if err != nil {
@@ -66,7 +66,7 @@ var (
 
 		"github.com/fudanchii/ben.Info": localStructSetter,
 		"github.com/fudanchii/ben.File": localStructSetter,
-		"github.com/fudanchii/ben.SHA1": func(setter valueSetterMap, obj reflect.Value, l Element) error {
+		"github.com/fudanchii/ben.SHA1": func(_ valueSetterMap, obj reflect.Value, l Element) error {
 			lval, err := l.String()
 			if err != nil {
 				return err
@@ -78,7 +78,7 @@ var (
 			start := 0
 			if obj.Type().Kind() == reflect.Slice {
 				obj.Set(reflect.MakeSlice(obj.Type(), hashesCount, hashesCount))
-				for i := 0; i < hashesCount; i++ {
+				for i := range hashesCount {
 					obj.Index(i).Set(reflect.ValueOf(hashes[start : start+20]))
 					start += 20
 				}
@@ -87,103 +87,119 @@ var (
 			return nil
 		},
 	}
+}
 
-	setValue = valueSetterMap{
-		reflect.Int64: func(_ valueSetterMap, obj reflect.Value, l Element) error {
-			val, err := l.Integer()
-			if err != err {
-				return err
-			}
-
-			obj.SetInt(val.Into())
-
-			return nil
-		},
-
-		reflect.String: func(_ valueSetterMap, obj reflect.Value, l Element) error {
-			val, err := l.String()
-			if err != nil {
-				return err
-			}
-
-			obj.SetString(val.Into())
-
-			return nil
-		},
-
-		reflect.Struct: func(setter valueSetterMap, obj reflect.Value, l Element) error {
-			objType := obj.Type()
-			fqTypeName := fullyQualifiedTypeName(objType)
-
-			structValueSetter, ok := setStructValue[fqTypeName]
-
-			if !ok {
-				return errTypeNotSupported
-			}
-
-			return structValueSetter(setter, obj, l)
-		},
-
-		reflect.Pointer: func(setter valueSetterMap, obj reflect.Value, l Element) error {
-			if obj.IsNil() {
-				obj.Set(reflect.New(obj.Type().Elem()))
-			}
-
-			fqTypeName := fullyQualifiedTypeName(obj.Type().Elem())
-			setterFunc, ok := setStructValue[fqTypeName]
-			if !ok {
-				setterFunc, ok = setter[obj.Type().Elem().Kind()]
-				if !ok {
-					return errTypeNotSupported
-				}
-			}
-
-			return setterFunc(setter, obj.Elem(), l)
-		},
-
-		reflect.Slice: func(setter valueSetterMap, obj reflect.Value, l Element) error {
-			if obj.IsNil() {
-				obj.Set(reflect.MakeSlice(obj.Type(), 0, 0))
-			}
-
-			// slice has a very specific behavior:
-			//   - []byte handled as one assignment, treated similar to string
-			//   - other elem type will be assigned in an iteration
-			//   - nested slice will be recursed, but still assigned under iteration
-			fqTypeName := fullyQualifiedTypeName(obj.Type().Elem())
-			setterFunc, ok := setStructValue[fqTypeName]
-			if ok {
-				return setterFunc(setter, obj, l)
-			}
-
-			elemType := obj.Type().Elem().Kind()
-			switch elemType {
-			// []byte
-			case reflect.Uint8:
-				return setter[reflect.String](setter, obj, l)
-
-			case reflect.Uint64, reflect.String, reflect.Struct, reflect.Pointer, reflect.Slice:
-				list, err := l.List()
-				if err != nil {
-					return err
-				}
-
-				for idx := 0; idx < len(list.Val); idx++ {
-					err := setter[elemType](setter, obj.Index(idx), list.Val[idx])
-					if err != nil {
-						return err
-					}
-				}
-			}
-
-			return nil
-		},
+func setValueForInt64(_ valueSetterMap, obj reflect.Value, l Element) error {
+	val, err := l.Integer()
+	if err != nil {
+		return err
 	}
 
+	obj.SetInt(val.Into())
+
+	return nil
+}
+
+func setValueForString(_ valueSetterMap, obj reflect.Value, l Element) error {
+	val, err := l.String()
+	if err != nil {
+		return err
+	}
+
+	obj.SetString(val.Into())
+
+	return nil
+}
+
+func setValueForStruct(setter valueSetterMap, obj reflect.Value, l Element) error {
+	objType := obj.Type()
+	fqTypeName := fullyQualifiedTypeName(objType)
+
+	structValueSetter, ok := setStructValue()[fqTypeName]
+
+	if !ok {
+		return errTypeNotSupported
+	}
+
+	return structValueSetter(setter, obj, l)
+}
+
+func setValueForPointer(setter valueSetterMap, obj reflect.Value, l Element) error {
+	if obj.IsNil() {
+		obj.Set(reflect.New(obj.Type().Elem()))
+	}
+
+	fqTypeName := fullyQualifiedTypeName(obj.Type().Elem())
+	setterFunc, ok := setStructValue()[fqTypeName]
+	if !ok {
+		setterFunc, ok = setter[obj.Type().Elem().Kind()]
+		if !ok {
+			return errTypeNotSupported
+		}
+	}
+
+	return setterFunc(setter, obj.Elem(), l)
+}
+
+func setValueForSlice(setter valueSetterMap, obj reflect.Value, l Element) error {
+	if obj.IsNil() {
+		obj.Set(reflect.MakeSlice(obj.Type(), 0, 0))
+	}
+
+	// slice has a very specific behavior:
+	//   - []byte handled as one assignment, treated similar to string
+	//   - other elem type will be assigned in an iteration
+	//   - nested slice will be recursed, but still assigned under iteration
+	fqTypeName := fullyQualifiedTypeName(obj.Type().Elem())
+	setterFunc, ok := setStructValue()[fqTypeName]
+	if ok {
+		return setterFunc(setter, obj, l)
+	}
+
+	elemType := obj.Type().Elem().Kind()
+
+	//nolint: exhaustive // already covered by default hand
+	switch elemType {
+	// []byte
+	case reflect.Uint8:
+		return setter[reflect.String](setter, obj, l)
+
+	case reflect.Invalid:
+		return errors.New("ben/list: unexpected invalid type for list element")
+
+	default:
+		list, err := l.List()
+		if err != nil {
+			return err
+		}
+
+		for idx := range list.Val {
+			setterErr := setter[elemType](setter, obj.Index(idx), list.Val[idx])
+			if setterErr != nil {
+				return setterErr
+			}
+		}
+	}
+
+	return nil
+}
+
+func setValue() valueSetterMap {
+	//nolint: exhaustive // no need to cover all types
+	return valueSetterMap{
+		reflect.Int64:   setValueForInt64,
+		reflect.String:  setValueForString,
+		reflect.Struct:  setValueForStruct,
+		reflect.Pointer: setValueForPointer,
+		reflect.Slice:   setValueForSlice,
+	}
+}
+
+var (
 	errTypeNotSupported = errors.New("this type is not supported")
 )
 
-func localStructSetter(setter valueSetterMap, obj reflect.Value, l Element) error {
+func localStructSetter(_ valueSetterMap, obj reflect.Value, l Element) error {
 	dict, err := l.Dictionary()
 	if err != nil {
 		return err
@@ -206,7 +222,7 @@ func castFromDictionaryInto[T infr.TryFromType[Dictionary, T]](dict Dictionary) 
 
 	numField := objType.NumField()
 
-	for i := 0; i < numField; i++ {
+	for i := range numField {
 		field := objType.Field(i)
 		fieldVal := objStruct.Field(i)
 
@@ -215,10 +231,10 @@ func castFromDictionaryInto[T infr.TryFromType[Dictionary, T]](dict Dictionary) 
 		}
 
 		fqTypeName := fullyQualifiedTypeName(field.Type)
-		setterFunc, ok := setStructValue[fqTypeName]
+		setterFunc, ok := setStructValue()[fqTypeName]
 
 		if !ok {
-			setterFunc, ok = setValue[fieldVal.Kind()]
+			setterFunc, ok = setValue()[fieldVal.Kind()]
 			if !ok {
 				return t, errTypeNotSupported
 			}
@@ -231,7 +247,7 @@ func castFromDictionaryInto[T infr.TryFromType[Dictionary, T]](dict Dictionary) 
 			continue
 		}
 
-		if err := setterFunc(setValue, fieldVal, val); err != nil {
+		if err := setterFunc(setValue(), fieldVal, val); err != nil {
 			return t, err
 		}
 	}

@@ -22,35 +22,31 @@ var (
 	errEndItemSequence = errors.New("end of item sequence")
 )
 
-type DefEltVal[T any] struct {
+type V[T any] struct {
 	Val T
 }
 
-func V[T any](v T) DefEltVal[T] {
-	return DefEltVal[T]{v}
-}
-
-func (d DefEltVal[T]) String() (String, error) {
+func (d V[T]) String() (String, error) {
 	var s String
 	return s, TypeError{"Element is not a String"}
 }
 
-func (d DefEltVal[T]) Integer() (Integer, error) {
+func (d V[T]) Integer() (Integer, error) {
 	var i Integer
 	return i, TypeError{"Element is not an Integer"}
 }
 
-func (d DefEltVal[T]) List() (List, error) {
+func (d V[T]) List() (List, error) {
 	var l List
 	return l, TypeError{"Element is not a List"}
 }
 
-func (d DefEltVal[T]) Dictionary() (Dictionary, error) {
+func (d V[T]) Dictionary() (Dictionary, error) {
 	var di Dictionary
 	return di, TypeError{"Element is not a Dictionary"}
 }
 
-func (d DefEltVal[T]) Bytes() ([]byte, error) {
+func (d V[T]) Bytes() ([]byte, error) {
 	return nil, TypeError{"Element does not implement Bytes"}
 }
 
@@ -119,11 +115,11 @@ func Decode[B Bencoder[B]](input ReadPeeker) (B, error) {
 }
 
 type Integer struct {
-	DefEltVal[int64]
+	V[int64]
 }
 
 func Int(v int64) Integer {
-	return Integer{V(v)}
+	return Integer{V[int64]{v}}
 }
 
 func (i Integer) Integer() (Integer, error) {
@@ -196,11 +192,11 @@ func (i Integer) Encode() []byte {
 }
 
 type String struct {
-	DefEltVal[string]
+	V[string]
 }
 
 func Str(v string) String {
-	return String{V(v)}
+	return String{V[string]{v}}
 }
 
 func (s String) String() (String, error) {
@@ -292,11 +288,11 @@ func InferredTypeDecode(input ReadPeeker) (Element, error) {
 }
 
 type List struct {
-	DefEltVal[[]Element]
+	V[[]Element]
 }
 
 func Lst(elt []Element) List {
-	return List{V(elt)}
+	return List{V[[]Element]{elt}}
 }
 
 func (l List) List() (List, error) {
@@ -352,11 +348,11 @@ func (l List) Encode() []byte {
 }
 
 type Dictionary struct {
-	DefEltVal[map[string]Element]
+	V[map[string]Element]
 }
 
 func Dct(m map[string]Element) Dictionary {
-	return Dictionary{V(m)}
+	return Dictionary{V[map[string]Element]{m}}
 }
 
 func (d Dictionary) Dictionary() (Dictionary, error) {
