@@ -48,44 +48,47 @@ type valueSetterMap map[reflect.Kind]valueSetterFunc
 
 type valueSetterFunc func(valueSetterMap, reflect.Value, Element) error
 
+func timeTimeStructSetter(_ valueSetterMap, obj reflect.Value, l Element) error {
+	// We will assume all time.Time data was serialized to UNIX epoch time.
+	v, err := l.Integer()
+	if err != nil {
+		return err
+	}
+
+	timeVal := time.Unix(v.Into(), 0)
+
+	obj.Set(reflect.ValueOf(timeVal))
+
+	return nil
+}
+
+func benSHA1StructSetter(_ valueSetterMap, obj reflect.Value, l Element) error {
+	lval, err := l.String()
+	if err != nil {
+		return err
+	}
+
+	hashes := []byte(lval.Into())
+	hashesCount := len(hashes) / 20 // 160 / 8 bytes = 20
+
+	start := 0
+	if obj.Type().Kind() == reflect.Slice {
+		obj.Set(reflect.MakeSlice(obj.Type(), hashesCount, hashesCount))
+		for i := range hashesCount {
+			obj.Index(i).Set(reflect.ValueOf(hashes[start : start+20]))
+			start += 20
+		}
+	}
+
+	return nil
+}
+
 func setStructValue() map[string]valueSetterFunc {
 	return map[string]valueSetterFunc{
-		"time.Time": func(_ valueSetterMap, obj reflect.Value, l Element) error {
-			// We will assume all time.Time data was serialized to UNIX epoch time.
-			v, err := l.Integer()
-			if err != nil {
-				return err
-			}
-
-			timeVal := time.Unix(v.Into(), 0)
-
-			obj.Set(reflect.ValueOf(timeVal))
-
-			return nil
-		},
-
+		"time.Time":                     timeTimeStructSetter,
 		"github.com/fudanchii/ben.Info": localStructSetter,
 		"github.com/fudanchii/ben.File": localStructSetter,
-		"github.com/fudanchii/ben.SHA1": func(_ valueSetterMap, obj reflect.Value, l Element) error {
-			lval, err := l.String()
-			if err != nil {
-				return err
-			}
-
-			hashes := []byte(lval.Into())
-			hashesCount := len(hashes) / 20 // 160 / 8 bytes = 20
-
-			start := 0
-			if obj.Type().Kind() == reflect.Slice {
-				obj.Set(reflect.MakeSlice(obj.Type(), hashesCount, hashesCount))
-				for i := range hashesCount {
-					obj.Index(i).Set(reflect.ValueOf(hashes[start : start+20]))
-					start += 20
-				}
-			}
-
-			return nil
-		},
+		"github.com/fudanchii/ben.SHA1": benSHA1StructSetter,
 	}
 }
 
