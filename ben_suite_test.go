@@ -30,9 +30,20 @@ var _ = Describe("Bencode", func() {
 		})
 
 		Context("decoding integer", func() {
-			source := bytes.NewBufferString("i71183928e")
-			bInt, err := ben.InferredTypeDecode(bufio.NewReader(source))
-			Expect(err).NotTo(HaveOccurred())
+			var (
+				source *bytes.Buffer
+				bInt   ben.Element
+				err    error
+			)
+
+			BeforeEach(func() {
+				source = bytes.NewBufferString("i71183928e")
+				bInt, err = ben.InferredTypeDecode(bufio.NewReader(source))
+			})
+
+			It("should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			It("should have Integer type", func() {
 				Expect(bInt.Type()).To(Equal(ben.IntType))
@@ -64,9 +75,20 @@ var _ = Describe("Bencode", func() {
 		})
 
 		Context("decoding string", func() {
-			source := bytes.NewBufferString("9:Mi Amigos")
-			bStr, err := ben.Decode[ben.String](bufio.NewReader(source))
-			Expect(err).NotTo(HaveOccurred())
+			var (
+				source *bytes.Buffer
+				bStr   ben.String
+				err    error
+			)
+
+			BeforeEach(func() {
+				source = bytes.NewBufferString("9:Mi Amigos")
+				bStr, err = ben.Decode[ben.String](bufio.NewReader(source))
+			})
+
+			It("should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			It("should have String type", func() {
 				Expect(bStr.Type()).To(Equal(ben.StringType))
@@ -78,9 +100,20 @@ var _ = Describe("Bencode", func() {
 		})
 
 		Context("given extraneous input", func() {
-			source := bytes.NewBufferString("3:abcdef")
-			bStr, err := ben.Decode[ben.String](bufio.NewReader(source))
-			Expect(err).NotTo(HaveOccurred())
+			var (
+				source *bytes.Buffer
+				bStr   ben.String
+				err    error
+			)
+
+			BeforeEach(func() {
+				source = bytes.NewBufferString("3:abcdef")
+				bStr, err = ben.Decode[ben.String](bufio.NewReader(source))
+			})
+
+			It("should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			It("should returns abc", func() {
 				Expect(bStr.Val).To(Equal("abc"))
@@ -105,9 +138,19 @@ var _ = Describe("Bencode", func() {
 		})
 
 		Context("decoding list", func() {
-			source := bytes.NewBufferString("li42ei100ei0ei12e4:namee")
-			bList, fail := ben.InferredTypeDecode(bufio.NewReader(source))
-			lElm, castErr := infr.TryInto[ben.List](bList)
+			var (
+				source  *bytes.Buffer
+				bList   ben.Element
+				fail    error
+				lElm    ben.List
+				castErr error
+			)
+
+			BeforeEach(func() {
+				source = bytes.NewBufferString("li42ei100ei0ei12e4:namee")
+				bList, fail = ben.InferredTypeDecode(bufio.NewReader(source))
+				lElm, castErr = infr.TryInto[ben.List](bList)
+			})
 
 			It("should not cause error", func() {
 				Expect(fail).NotTo(HaveOccurred())
@@ -141,27 +184,48 @@ var _ = Describe("Bencode", func() {
 		})
 
 		Context("decoding partially corrupted list", func() {
-			source := bytes.NewBufferString("li234e4:abcdi24")
-			bList, err := ben.InferredTypeDecode(bufio.NewReader(source))
-			Expect(err).To(HaveOccurred())
+			var (
+				bList ben.Element
+				err   error
+			)
+
+			BeforeEach(func() {
+				source := bytes.NewBufferString("li234e4:abcdi24")
+				bList, err = ben.InferredTypeDecode(bufio.NewReader(source))
+			})
+
+			It("should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
 
 			It("returns non nil value", func() {
 				Expect(bList).NotTo(BeNil())
 			})
 
-			lst, err := infr.TryInto[ben.List](bList)
-			Expect(err).NotTo(HaveOccurred())
+			Context("convert to ben.List", func() {
+				var (
+					lst ben.List
+				)
 
-			It("should have the first two element", func() {
-				Expect(lst.Val).To(HaveLen(2))
-			})
+				BeforeEach(func() {
+					lst, err = infr.TryInto[ben.List](bList)
+				})
 
-			It("should returns 234 for the first element", func() {
-				Expect(lst.Val[0]).To(Equal(ben.Int(234)))
-			})
+				It("should not error", func() {
+					Expect(err).NotTo(HaveOccurred())
+				})
 
-			It("should returns abcd for the second element", func() {
-				Expect(lst.Val[1]).To(Equal(ben.Str("abcd")))
+				It("should have the first two element", func() {
+					Expect(lst.Val).To(HaveLen(2))
+				})
+
+				It("should returns 234 for the first element", func() {
+					Expect(lst.Val[0]).To(Equal(ben.Int(234)))
+				})
+
+				It("should returns abcd for the second element", func() {
+					Expect(lst.Val[1]).To(Equal(ben.Str("abcd")))
+				})
 			})
 		})
 	})
@@ -188,90 +252,219 @@ var _ = Describe("Bencode", func() {
 		})
 
 		Context("decoding dictionary", func() {
-			source := bytes.NewBufferString("d6:answeri42e8:question16:to be determinede")
+			var (
+				bDict ben.Element
+				err   error
+			)
 
-			bDict, err := ben.InferredTypeDecode(bufio.NewReader(source))
-			Expect(err).NotTo(HaveOccurred())
-
-			d, err := infr.TryInto[ben.Dictionary](bDict)
-			Expect(err).NotTo(HaveOccurred())
-
-			It("should have dictionary type", func() {
-				Expect(bDict.Type()).To(Equal(ben.DictType))
+			BeforeEach(func() {
+				source := bytes.NewBufferString("d6:answeri42e8:question16:to be determinede")
+				bDict, err = ben.InferredTypeDecode(bufio.NewReader(source))
 			})
 
-			It("should have 2 elements", func() {
-				Expect(d.Val).To(HaveLen(2))
+			It("should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should have key: 'answer', with value: '42'", func() {
-				Expect(d.Val["answer"]).To(Equal(ben.Int(42)))
-			})
+			Context("casting to ben.Dictionary", func() {
+				var (
+					d ben.Dictionary
+				)
 
-			It("should have key: 'question', with value: 'to be determined'", func() {
-				Expect(d.Val["question"]).To(Equal(ben.Str("to be determined")))
+				BeforeEach(func() {
+					d, err = infr.TryInto[ben.Dictionary](bDict)
+				})
+
+				It("should not error", func() {
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should have dictionary type", func() {
+					Expect(bDict.Type()).To(Equal(ben.DictType))
+				})
+
+				It("should have 2 elements", func() {
+					Expect(d.Val).To(HaveLen(2))
+				})
+
+				It("should have key: 'answer', with value: '42'", func() {
+					Expect(d.Val["answer"]).To(Equal(ben.Int(42)))
+				})
+
+				It("should have key: 'question', with value: 'to be determined'", func() {
+					Expect(d.Val["question"]).To(Equal(ben.Str("to be determined")))
+				})
 			})
 		})
 	})
 
 	Describe("Read torrent file", func() {
 		Context("decoding torrent file", func() {
-			content, err := os.OpenFile("testdata/NetBSD-10.0-amd64.iso.torrent", os.O_RDONLY, 0)
-			It("should read test data without error", func() {
-				Expect(err).NotTo(HaveOccurred())
+			var (
+				content *os.File
+				err     error
+			)
+
+			Context("cast to ben.Dictionary", func() {
+				var (
+					torrentDict ben.Dictionary
+					torrent     ben.Torrent
+				)
+
+				BeforeEach(func() {
+					content, err = os.OpenFile("testdata/NetBSD-10.0-amd64.iso.torrent", os.O_RDONLY, 0)
+					Expect(err).NotTo(HaveOccurred())
+
+					torrentDict, err = ben.Decode[ben.Dictionary](bufio.NewReader(content))
+					Expect(err).NotTo(HaveOccurred())
+
+					torrent, err = infr.TryFrom[ben.Dictionary, ben.Torrent](torrentDict).TryInto()
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				AfterEach(func() {
+					_ = content.Close()
+				})
+
+				It("should have the correct 'announce' value", func() {
+					Expect(torrent.Announce).To(Equal("http://tracker.NetBSD.org:6969/announce"))
+				})
+
+				It("should have the correct 'created by' value", func() {
+					Expect(torrent.CreatedBy).NotTo(BeNil())
+					Expect(*torrent.CreatedBy).To(Equal("Transmission/4.0.3 (6b0e49bbb2)"))
+				})
+
+				It("should have the correct 'encoding' value", func() {
+					Expect(torrent.Encoding).NotTo(BeNil())
+					Expect(*torrent.Encoding).To(Equal("UTF-8"))
+				})
+
+				It("should  have the correct 'creation date' value", func() {
+					Expect(torrent.CreationDate).NotTo(BeNil())
+
+					ts, parseErr := time.Parse(time.RFC3339, "2024-03-30T17:17:24+09:00")
+					Expect(parseErr).NotTo(HaveOccurred())
+
+					Expect(*torrent.CreationDate).To(Equal(ts))
+				})
+
+				It("should have the correct 'info.name' value", func() {
+					Expect(torrent.Info.Name).To(Equal("NetBSD-10.0-amd64.iso"))
+				})
+
+				It("should have the correct 'info.length' value", func() {
+					Expect(torrent.Info.Length).To(Equal(int64(652652544)))
+				})
+
+				It("should have the correct 'info.piece_length' value", func() {
+					Expect(torrent.Info.PieceLength).To(Equal(int64(524288)))
+				})
+
+				It("should have the correct 'info.pieces' value", func() {
+					Expect(torrent.Info.Pieces).To(HaveLen(1245))
+					Expect(torrent.Info.Pieces[0]).
+						To(Equal(ben.SHA1("\x9a\xe7\x47\x53\x58\x35\x0c\x00\x25\x86\xfe\x2c\x48\x4c\x6c\x62\x66\x10\xb2\x9d")))
+				})
 			})
+		})
+	})
 
-			defer func() { _ = content.Close() }()
+	Describe("Read torrent file", func() {
+		Context("decoding torrent file", func() {
+			var (
+				content *os.File
+				err     error
+			)
 
-			torrentDict, err := ben.Decode[ben.Dictionary](bufio.NewReader(content))
-			It("should decode file content without error", func() {
-				Expect(err).NotTo(HaveOccurred())
-			})
+			Context("cast to ben.Dictionary", func() {
+				var (
+					torrentDict ben.Dictionary
+					torrent     ben.Torrent
+				)
 
-			torrent, err := infr.TryFrom[ben.Dictionary, ben.Torrent](torrentDict).TryInto()
-			It("should be able to cast ben Dict type to Torrent struct without error", func() {
-				Expect(err).NotTo(HaveOccurred())
-			})
+				BeforeEach(func() {
+					content, err = os.OpenFile("testdata/abc.torrent", os.O_RDONLY, 0)
+					Expect(err).NotTo(HaveOccurred())
 
-			It("should have the correct 'announce' value", func() {
-				Expect(torrent.Announce).To(Equal("http://tracker.NetBSD.org:6969/announce"))
-			})
+					torrentDict, err = ben.Decode[ben.Dictionary](bufio.NewReader(content))
+					Expect(err).NotTo(HaveOccurred())
 
-			It("should have the correct 'created by' value", func() {
-				Expect(torrent.CreatedBy).NotTo(BeNil())
-				Expect(*torrent.CreatedBy).To(Equal("Transmission/4.0.3 (6b0e49bbb2)"))
-			})
+					torrent, err = infr.TryFrom[ben.Dictionary, ben.Torrent](torrentDict).TryInto()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(torrent).NotTo(BeNil())
+				})
 
-			It("should have the correct 'encoding' value", func() {
-				Expect(torrent.Encoding).NotTo(BeNil())
-				Expect(*torrent.Encoding).To(Equal("UTF-8"))
-			})
+				AfterEach(func() { _ = content.Close() })
 
-			It("should  have the correct 'creation date' value", func() {
-				Expect(torrent.CreationDate).NotTo(BeNil())
+				It("should have the correct 'announce' value", func() {
+					Expect(torrent.Announce).To(Equal(""))
+				})
 
-				ts, parseErr := time.Parse(time.RFC3339, "2024-03-30T17:17:24+09:00")
-				Expect(parseErr).NotTo(HaveOccurred())
+				It("should have the correct 'created by' value", func() {
+					Expect(torrent.CreatedBy).NotTo(BeNil())
+					Expect(*torrent.CreatedBy).To(Equal("kimbatt.github.io/torrent-creator"))
+				})
 
-				Expect(*torrent.CreationDate).To(Equal(ts))
-			})
+				It("should have the correct 'encoding' value", func() {
+					Expect(torrent.Encoding).To(BeNil())
+				})
 
-			It("should have the correct 'info.name' value", func() {
-				Expect(torrent.Info.Name).To(Equal("NetBSD-10.0-amd64.iso"))
-			})
+				It("should  have the correct 'creation date' value", func() {
+					Expect(torrent.CreationDate).NotTo(BeNil())
 
-			It("should have the correct 'info.length' value", func() {
-				Expect(torrent.Info.Length).To(Equal(int64(652652544)))
-			})
+					ts, parseErr := time.Parse(time.RFC3339, "2025-10-07T21:59:37+09:00")
+					Expect(parseErr).NotTo(HaveOccurred())
 
-			It("should have the correct 'info.piece_length' value", func() {
-				Expect(torrent.Info.PieceLength).To(Equal(int64(524288)))
-			})
+					Expect(*torrent.CreationDate).To(Equal(ts))
+				})
 
-			It("should have the correct 'info.pieces' value", func() {
-				Expect(torrent.Info.Pieces).To(HaveLen(1245))
-				Expect(torrent.Info.Pieces[0]).
-					To(Equal(ben.SHA1("\x9a\xe7\x47\x53\x58\x35\x0c\x00\x25\x86\xfe\x2c\x48\x4c\x6c\x62\x66\x10\xb2\x9d")))
+				It("should have the correct 'info.name' value", func() {
+					Expect(torrent.Info.Name).To(Equal("abc"))
+				})
+
+				It("should have the correct 'info.length' value", func() {
+					Expect(torrent.Info.Length).To(Equal(int64(0)))
+				})
+
+				It("should have the correct 'info.piece_length' value", func() {
+					Expect(torrent.Info.PieceLength).To(Equal(int64(16384)))
+				})
+
+				It("should have the correct 'info.pieces' value", func() {
+					Expect(torrent.Info.Pieces).To(HaveLen(1))
+					Expect(torrent.Info.Pieces[0]).
+						To(Equal(ben.SHA1(
+							[]byte{10, 203, 73, 41, 49, 236, 205, 139, 23, 239, 144, 236, 166, 111, 148, 98, 113, 80, 60, 7},
+						)))
+				})
+
+				It("should have the correct 'info.files' value", func() {
+					Expect(torrent.Info.Files).To(HaveLen(3))
+
+					expectedFiles := []struct {
+						length int64
+						path   []string
+					}{
+						{
+							length: 6,
+							path:   []string{"a.txt"},
+						},
+						{
+							length: 6,
+							path:   []string{"b.txt"},
+						},
+						{
+							length: 6,
+							path:   []string{"c.txt"},
+						},
+					}
+
+					for i, file := range torrent.Info.Files {
+						Expect(file.Length).To(Equal(expectedFiles[i].length))
+						Expect(file.Path).To(Equal(expectedFiles[i].path))
+					}
+				})
 			})
 		})
 	})

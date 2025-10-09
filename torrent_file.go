@@ -10,7 +10,7 @@ import (
 )
 
 type Torrent struct {
-	Announce     string     `ben:"announce"`
+	Announce     string     `ben:"announce,omitempty"`
 	Info         Info       `ben:"info"`
 	CreatedBy    *string    `ben:"created by,omitempty"`
 	CreationDate *time.Time `ben:"creation date,omitempty"`
@@ -24,7 +24,7 @@ func (t Torrent) TryFrom(d Dictionary) (Torrent, error) {
 type Info struct {
 	Name        string `ben:"name"`
 	Length      int64  `ben:"length"`
-	PieceLength int64  `ben:"piece length"`
+	PieceLength int64  `ben:"piece length,omitempty"`
 	Pieces      []SHA1 `ben:"pieces"`
 	Files       []File `ben:"files,omitempty"`
 }
@@ -86,13 +86,17 @@ func benSHA1StructSetter(_ valueSetterMap, obj reflect.Value, l Element) error {
 func setStructValue() map[string]valueSetterFunc {
 	return map[string]valueSetterFunc{
 		"time.Time":                     timeTimeStructSetter,
-		"github.com/fudanchii/ben.Info": localStructSetter,
-		"github.com/fudanchii/ben.File": localStructSetter,
+		"github.com/fudanchii/ben.Info": setterFor[Info],
+		"github.com/fudanchii/ben.File": setterFor[File],
 		"github.com/fudanchii/ben.SHA1": benSHA1StructSetter,
 	}
 }
 
 func setValueForInt64(_ valueSetterMap, obj reflect.Value, l Element) error {
+	if l == nil {
+		l = Int(0)
+	}
+
 	val, err := l.Integer()
 	if err != nil {
 		return err
@@ -104,6 +108,10 @@ func setValueForInt64(_ valueSetterMap, obj reflect.Value, l Element) error {
 }
 
 func setValueForString(_ valueSetterMap, obj reflect.Value, l Element) error {
+	if l == nil {
+		l = Str("")
+	}
+
 	val, err := l.String()
 	if err != nil {
 		return err
@@ -153,12 +161,6 @@ func setValueForSlice(setter valueSetterMap, obj reflect.Value, l Element) error
 	//   - []byte handled as one assignment, treated similar to string
 	//   - other elem type will be assigned in an iteration
 	//   - nested slice will be recursed, but still assigned under iteration
-	fqTypeName := fullyQualifiedTypeName(obj.Type().Elem())
-	setterFunc, ok := setStructValue()[fqTypeName]
-	if ok {
-		return setterFunc(setter, obj, l)
-	}
-
 	elemType := obj.Type().Elem().Kind()
 
 	//nolint: exhaustive // already covered by default hand
@@ -170,11 +172,25 @@ func setValueForSlice(setter valueSetterMap, obj reflect.Value, l Element) error
 	case reflect.Invalid:
 		return errors.New("ben/list: unexpected invalid type for list element")
 
+	// []SHA1 is [][]byte
+	case reflect.Slice:
+		fqTypeName := fullyQualifiedTypeName(obj.Type().Elem())
+
+		setterFunc, ok := setStructValue()[fqTypeName]
+		if ok {
+			return setterFunc(setter, obj, l)
+		}
+
+		return errTypeNotSupported
+
 	default:
 		list, err := l.List()
 		if err != nil {
 			return err
 		}
+
+		lvLen := len(list.Val)
+		obj.Set(reflect.MakeSlice(obj.Type(), lvLen, lvLen))
 
 		for idx := range list.Val {
 			setterErr := setter[elemType](setter, obj.Index(idx), list.Val[idx])
@@ -202,18 +218,18 @@ var (
 	errTypeNotSupported = errors.New("this type is not supported")
 )
 
-func localStructSetter(_ valueSetterMap, obj reflect.Value, l Element) error {
+func setterFor[T infr.TryFromType[Dictionary, T]](_ valueSetterMap, obj reflect.Value, l Element) error {
 	dict, err := l.Dictionary()
 	if err != nil {
 		return err
 	}
 
-	info, err := infr.TryFrom[Dictionary, Info](dict).TryInto()
+	fieldObj, err := infr.TryFrom[Dictionary, T](dict).TryInto()
 	if err != nil {
 		return err
 	}
 
-	obj.Set(reflect.ValueOf(info))
+	obj.Set(reflect.ValueOf(fieldObj))
 	return nil
 }
 
@@ -246,7 +262,7 @@ func castFromDictionaryInto[T infr.TryFromType[Dictionary, T]](dict Dictionary) 
 		tag := strings.SplitN(field.Tag.Get("ben"), ",", 2)
 		val, present := dict.Val[tag[0]]
 
-		if !present && tag[1] == "omitempty" {
+		if !present && len(tag) == 2 && tag[1] == "omitempty" {
 			continue
 		}
 

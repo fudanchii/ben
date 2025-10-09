@@ -322,15 +322,19 @@ func (l List) Decode(input ReadPeeker) (List, error) {
 	for {
 		var lmnt Element
 		lmnt, err = InferredTypeDecode(input)
+
 		if err != nil && !errors.Is(err, errEndItemSequence) {
 			return Lst(lst), err
 		}
+
 		if lmnt == nil { // end of sequence
-			break
+			// discard end of list
+			_, err = input.ReadByte()
+			return Lst(lst), err
 		}
+
 		lst = append(lst, lmnt)
 	}
-	return Lst(lst), nil
 }
 
 func (l List) Type() ElementType {
@@ -390,7 +394,8 @@ func (d Dictionary) Decode(input ReadPeeker) (Dictionary, error) {
 		}
 
 		if testPeek[0] == EndItemSeq {
-			break
+			_, err = input.ReadByte()
+			return Dct(dict), err
 		}
 
 		key, err = Decode[String](input)
@@ -399,16 +404,21 @@ func (d Dictionary) Decode(input ReadPeeker) (Dictionary, error) {
 		}
 
 		val, err = InferredTypeDecode(input)
-		if err != nil {
+
+		if err != nil && !errors.Is(err, errEndItemSequence) {
+			_, rbErr := input.ReadByte()
+			if rbErr != nil {
+				err = rbErr
+			}
 			return d, err
 		}
+
 		if val == nil {
 			return d, InvalidInputError{"key without value"}
 		}
+
 		dict[key.Val] = val
 	}
-
-	return Dct(dict), nil
 }
 
 func (d Dictionary) Type() ElementType {
