@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	errEndItemSequence = errors.New("end of item sequence")
+	ErrEndItemSequence = errors.New("end of item sequence")
 )
 
 type V[T any] struct {
@@ -173,7 +173,7 @@ func (i Integer) Decode(input ReadPeeker) (Integer, error) {
 			continue
 		}
 
-		return i, InvalidInputError{strconv.Itoa(int(ch))}
+		return i, fmt.Errorf("%w, input: %s", InvalidInputError{"input is not Integer"}, string([]byte{ch}))
 	}
 
 	if minus {
@@ -247,7 +247,7 @@ func (s String) Decode(input ReadPeeker) (String, error) {
 	}
 
 	if sLen, err = strconv.ParseInt(string(length), 10, 64); err != nil {
-		return s, err
+		return s, fmt.Errorf("%w, cause: %w", InvalidInputError{"invalid string length"}, err)
 	}
 
 	if _, err = io.CopyN(&buff, input, sLen); err != nil {
@@ -281,7 +281,7 @@ func InferredTypeDecode(input ReadPeeker) (Element, error) {
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return Decode[String](input)
 	case EndItemSeq:
-		return nil, errEndItemSequence
+		return nil, ErrEndItemSequence
 	default:
 		return nil, InvalidInputError{"should not reach here"}
 	}
@@ -323,7 +323,7 @@ func (l List) Decode(input ReadPeeker) (List, error) {
 		var lmnt Element
 		lmnt, err = InferredTypeDecode(input)
 
-		if err != nil && !errors.Is(err, errEndItemSequence) {
+		if err != nil && !errors.Is(err, ErrEndItemSequence) {
 			return Lst(lst), err
 		}
 
@@ -405,7 +405,7 @@ func (d Dictionary) Decode(input ReadPeeker) (Dictionary, error) {
 
 		val, err = InferredTypeDecode(input)
 
-		if err != nil && !errors.Is(err, errEndItemSequence) {
+		if err != nil && !errors.Is(err, ErrEndItemSequence) {
 			_, rbErr := input.ReadByte()
 			if rbErr != nil {
 				err = rbErr
@@ -437,9 +437,9 @@ func (d Dictionary) Encode() []byte {
 }
 
 type InvalidInputError struct {
-	msg string
+	Msg string
 }
 
 func (err InvalidInputError) Error() string {
-	return fmt.Sprintf("Invalid Input Error: %s", err.msg)
+	return fmt.Sprintf("Invalid Input Error: %s", err.Msg)
 }

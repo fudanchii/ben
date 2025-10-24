@@ -65,7 +65,7 @@ var _ = Describe("Bencode", func() {
 			source := bytes.NewBufferString("i9809d3:abc")
 			_, err := ben.InferredTypeDecode(bufio.NewReader(source))
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Invalid Input Error: 100"))
+			Expect(err.Error()).To(Equal("Invalid Input Error: input is not Integer, input: d"))
 		})
 	})
 
