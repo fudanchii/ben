@@ -18,44 +18,32 @@ const (
 	digitMask       = 0x30
 )
 
-var (
-	ErrEndItemSequence = errors.New("end of item sequence")
-)
-
 type V[T any] struct {
 	Val T
 }
 
 func (d V[T]) String() (String, error) {
 	var s String
-	return s, TypeError{"Element is not a String"}
+	return s, ErrNotAString
 }
 
 func (d V[T]) Integer() (Integer, error) {
 	var i Integer
-	return i, TypeError{"Element is not an Integer"}
+	return i, ErrNotAnInteger
 }
 
 func (d V[T]) List() (List, error) {
 	var l List
-	return l, TypeError{"Element is not a List"}
+	return l, ErrNotAList
 }
 
 func (d V[T]) Dictionary() (Dictionary, error) {
 	var di Dictionary
-	return di, TypeError{"Element is not a Dictionary"}
+	return di, ErrNotADict
 }
 
 func (d V[T]) Bytes() ([]byte, error) {
-	return nil, TypeError{"Element does not implement Bytes"}
-}
-
-type TypeError struct {
-	msg string
-}
-
-func (t TypeError) Error() string {
-	return fmt.Sprintf("Type assertion error: %s", t.msg)
+	return nil, ErrNotImplBytes
 }
 
 type ElementType int
@@ -151,7 +139,7 @@ func (i Integer) Decode(input ReadPeeker) (Integer, error) {
 	}
 
 	if ch != StartInt {
-		return i, InvalidInputError{"input is not Integer"}
+		return i, ErrInputIsNotInteger
 	}
 
 	for {
@@ -173,7 +161,7 @@ func (i Integer) Decode(input ReadPeeker) (Integer, error) {
 			continue
 		}
 
-		return i, fmt.Errorf("%w, input: %s", InvalidInputError{"input is not Integer"}, string([]byte{ch}))
+		return i, fmt.Errorf("%w, input: %s", ErrInputIsNotInteger, string([]byte{ch}))
 	}
 
 	if minus {
@@ -247,7 +235,7 @@ func (s String) Decode(input ReadPeeker) (String, error) {
 	}
 
 	if sLen, err = strconv.ParseInt(string(length), 10, 64); err != nil {
-		return s, fmt.Errorf("%w, cause: %w", InvalidInputError{"invalid string length"}, err)
+		return s, fmt.Errorf("%w, cause: %w", ErrInvalidStringLength, err)
 	}
 
 	if _, err = io.CopyN(&buff, input, sLen); err != nil {
@@ -283,7 +271,7 @@ func InferredTypeDecode(input ReadPeeker) (Element, error) {
 	case EndItemSeq:
 		return nil, ErrEndItemSequence
 	default:
-		return nil, InvalidInputError{"should not reach here"}
+		return nil, ErrUnknownTypeMarker
 	}
 }
 
@@ -316,7 +304,7 @@ func (l List) Decode(input ReadPeeker) (List, error) {
 	}
 
 	if ch != StartList {
-		return l, InvalidInputError{"not a list type"}
+		return l, ErrCannotParseAsList
 	}
 
 	for {
@@ -384,7 +372,7 @@ func (d Dictionary) Decode(input ReadPeeker) (Dictionary, error) {
 	}
 
 	if ch != StartDict {
-		return d, InvalidInputError{"not a dictionary"}
+		return d, ErrCannotParseAsDict
 	}
 
 	for {
@@ -414,7 +402,7 @@ func (d Dictionary) Decode(input ReadPeeker) (Dictionary, error) {
 		}
 
 		if val == nil {
-			return d, InvalidInputError{"key without value"}
+			return d, ErrKeyWithoutValue
 		}
 
 		dict[key.Val] = val
@@ -434,12 +422,4 @@ func (d Dictionary) Encode() []byte {
 	}
 	buff.WriteByte(EndItemSeq)
 	return buff.Bytes()
-}
-
-type InvalidInputError struct {
-	Msg string
-}
-
-func (err InvalidInputError) Error() string {
-	return fmt.Sprintf("Invalid Input Error: %s", err.Msg)
 }

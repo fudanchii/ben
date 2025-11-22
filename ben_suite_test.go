@@ -65,7 +65,7 @@ var _ = Describe("Bencode", func() {
 			source := bytes.NewBufferString("i9809d3:abc")
 			_, err := ben.InferredTypeDecode(bufio.NewReader(source))
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Invalid Input Error: input is not Integer, input: d"))
+			Expect(err.Error()).To(Equal("Invalid Input Error: input is not an integer, input: d"))
 		})
 	})
 
@@ -403,7 +403,7 @@ var _ = Describe("Bencode", func() {
 
 				It("should have the correct 'created by' value", func() {
 					Expect(torrent.CreatedBy).NotTo(BeNil())
-					Expect(*torrent.CreatedBy).To(Equal("kimbatt.github.io/torrent-creator"))
+					Expect(*torrent.CreatedBy).To(Equal("abc"))
 				})
 
 				It("should have the correct 'encoding' value", func() {
